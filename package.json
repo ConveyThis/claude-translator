@@ -1,0 +1,29 @@
+{
+  "name": "static-site-localization",
+  "version": "1.0.0",
+  "description": "Translate a static website into dozens of languages as real static pages, by substituting into built HTML instead of re-rendering.",
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "author": "ConveyThis (https://conveythis.com)",
+  "homepage": "https://github.com/ConveyThis/static-site-localization",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ConveyThis/static-site-localization.git"
+  },
+  "bugs": { "url": "https://github.com/ConveyThis/static-site-localization/issues" },
+  "keywords": [
+    "i18n", "l10n", "localization", "translation", "static-site", "hreflang",
+    "seo", "astro", "gemini", "multilingual"
+  ],
+  "engines": { "node": ">=20" },
+  "dependencies": { "parse5": "^7.3.0" },
+  "scripts": {
+    "i18n:extract": "node scripts/extract.mjs",
+    "i18n:translate": "node scripts/translate.mjs",
+    "i18n:review": "node scripts/review.mjs",
+    "i18n:build": "node scripts/build-locales.mjs",
+    "i18n:verify": "node scripts/verify.mjs",
+    "i18n:audit": "node scripts/audit-seo.mjs",
+    "check": "for f in scripts/*.mjs; do node --check \"$f\" || exit 1; done && echo 'all scripts parse'"
+  }
+}

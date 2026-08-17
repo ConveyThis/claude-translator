@@ -1,0 +1,33 @@
+name: Bug report
+description: Something in the pipeline behaves incorrectly
+labels: [bug]
+body:
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Which stage?
+      options: [extract, translate, review, build-locales, verify, audit-seo, config, other]
+    validations: { required: true }
+  - type: input
+    id: generator
+    attributes:
+      label: Static site generator
+      placeholder: "Astro 5 / Next 15 export / Hugo / Eleventy / plain HTML"
+    validations: { required: true }
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Include the console output of the failing stage.
+    validations: { required: true }
+  - type: textarea
+    id: config
+    attributes:
+      label: Your i18n.config.json
+      description: Redact anything private.
+      render: json
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      placeholder: "v20.11.0"

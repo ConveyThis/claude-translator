@@ -1,0 +1,59 @@
+{
+  "buildDir": "dist",
+  "baseUrl": "https://example.com",
+  "sourceLanguage": "English",
+  "siteName": "Acme",
+  "siteDescription": "an online project-management tool",
+  "locales": [
+    {
+      "hreflang": "es",
+      "pathCode": "es",
+      "nativeLabel": "Español"
+    },
+    {
+      "hreflang": "pt-BR",
+      "pathCode": "pt-br",
+      "nativeLabel": "Português (Brasil)"
+    },
+    {
+      "hreflang": "ar",
+      "pathCode": "ar",
+      "nativeLabel": "العربية"
+    },
+    {
+      "hreflang": "zh-Hant",
+      "pathCode": "zh-tw",
+      "nativeLabel": "繁體中文"
+    }
+  ],
+  "pages": {
+    "source": "build",
+    "exclude": [
+      "404",
+      "admin"
+    ]
+  },
+  "rtlLocales": [
+    "ar",
+    "fa",
+    "he",
+    "ur",
+    "ps",
+    "sd",
+    "ug",
+    "yi"
+  ],
+  "doNotTranslate": {
+    "brands": [
+      "Acme",
+      "Acme Cloud Inc"
+    ],
+    "formats": [
+      "PDF",
+      "DOCX",
+      "XLSX",
+      "EPUB"
+    ]
+  },
+  "model": "gemini-2.5-flash-lite"
+}

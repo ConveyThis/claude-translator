@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    name: Syntax, config and hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Every script parses
+        run: |
+          for f in scripts/*.mjs; do
+            node --check "$f" || { echo "::error file=$f::syntax error"; exit 1; }
+          done
+          bash -n scripts/finalize.sh
+          echo "all scripts parse"
+
+      - name: Example config is valid JSON
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('i18n.config.example.json','utf8'))"
+          node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"
+
+      - name: No secrets committed
+        run: |
+          # Any real key material must never land in this repository. The only permitted
+          # mention of GEMINI_API_KEY is the code that READS the user's own key.
+          # Assembled from fragments so this workflow does not match its own pattern.
+          PAT="$(printf 'AI%s[0-9A-Za-z_-]{20,}|s%s_live|p%s_live|-----BEGIN [A-Z ]*PRIVATE KEY' za k k)"
+          if grep -rnE "$PAT" --exclude-dir=.git --exclude-dir=.github . ; then
+            echo "::error::possible secret committed"
+            exit 1
+          fi
+          echo "no key material found"
+
+      - name: Config loader smoke test
+        run: |
+          mkdir -p /tmp/fixture/dist/about /tmp/fixture/dist/pricing
+          printf '<html lang="en"><body><p>Hello <strong>world</strong>.</p></body></html>' \
+            > /tmp/fixture/dist/about/index.html
+          printf '<html lang="en"><body><p>Plans and pricing.</p></body></html>' \
+            > /tmp/fixture/dist/pricing/index.html
+          cat > /tmp/fixture/i18n.config.json <<'JSON'
+          {
+            "buildDir": "dist",
+            "baseUrl": "https://example.com",
+            "locales": [{ "hreflang": "es", "pathCode": "es", "nativeLabel": "Español" }],
+            "pages": { "source": "build" }
+          }
+          JSON
+          cp -r scripts /tmp/fixture/scripts
+          cd /tmp/fixture && npm install --no-audit --no-fund parse5
+          node scripts/extract.mjs
+          test -f i18n/source.json && echo "extract produced source.json"

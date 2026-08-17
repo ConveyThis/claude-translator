@@ -1,0 +1,21 @@
+node_modules/
+.env
+.env.*
+!.env.example
+
+# i18n intermediates — regenerated from the build output
+i18n/source.json
+i18n/manifest.json
+i18n/segments/
+i18n/seo-audit.json
+i18n/tm/*.failures.json
+i18n/tm/*.review.json
+
+# build output
+dist/
+out/
+public/
+_site/
+
+.DS_Store
+*.log
