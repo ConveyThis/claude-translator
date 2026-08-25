@@ -77,6 +77,36 @@ With <0>Acme</0>, you'll get a streamlined flow.
 
 The builder restores the original tags by index.
 
+### Does it hold?
+
+[`doctranslator.com/fr`](https://doctranslator.com/fr) is a large Astro site whose French pages
+were built by this pipeline. Against the English original, the markup is **byte-identical** —
+**2,743 tags in identical sequence**, **all 2,031 `class` attributes matching**, and page weight
+up **0.74%**, which is only French being longer than English. Nothing structural moved, so there
+is nothing for the browser to lay out differently.
+
+Ten seconds to check:
+
+```bash
+curl -s https://doctranslator.com/   | grep -o 'class="[^"]*"' > en.txt
+curl -s https://doctranslator.com/fr | grep -o 'class="[^"]*"' > fr.txt
+diff en.txt fr.txt && echo "markup identical — only the text changed"
+```
+
+PageSpeed Insights performance, measured 25 August 2026:
+
+| | English source | French, from this tool |
+| --- | --- | --- |
+| Desktop | 100 | **100** |
+| Mobile | 98 | **98** |
+
+Accessibility, best practices and SEO were 100 on every run of both pages, in both strategies.
+
+**These are medians, deliberately.** Lighthouse scores move: five consecutive runs of the same
+English mobile page returned 98, 98, 88, 98, 98, with LCP swinging between 1.8s and 3.2s. That
+is network and CDN variance, not page quality. Measure both languages yourself and compare them
+against each other rather than against a number in a README.
+
 ---
 
 ## Requirements

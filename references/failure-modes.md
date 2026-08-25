@@ -144,6 +144,30 @@ than failing. Placeholder validation still guards the output, so the weaker mode
 retries and not correctness. A real error (bad key, unknown model) must **not** match this
 path, which is why the pattern is narrow.
 
+### Locale pages built from a stale source build
+
+**Symptom.** The locale pages' inlined critical CSS no longer matches the source page's, and
+each carries rules for classes the other one uses. Tag sequence and `class` attributes still
+match perfectly, so substitution clearly worked — but the two pages disagree about their CSS.
+
+**Cause.** The source site was rebuilt *after* the locale pages were generated, and
+critical-CSS extraction is not stable across builds. Observed live on a production site: two
+builds three hours apart, identical markup, and the later build's critical CSS gained
+`.bg-sky-500`, `.bg-slate-100`, `.object-cover` and `.scale-150` while losing `.aspect-video`.
+Neither build's CSS was a correct match for its own markup.
+
+This is the same instability that makes per-locale re-rendering a bad idea, showing up in a
+different place — and it is a useful reminder that the tooling is the unreliable part, not the
+substitution.
+
+**Fix.** Re-run `build-locales.mjs` after any rebuild that changes markup. It is nearly free:
+the translation memory is keyed by source text, so nothing is re-translated and no API call is
+made. Cheap enough to put in the same CI step as the build itself.
+
+**How to spot it.** Compare an inlined `<style>` block between a source page and its locale
+twin. Substitution never touches `<style>` contents, so if they differ, the locale page was
+built from a different snapshot than the one you are looking at.
+
 ### A model id sent to the wrong provider
 
 **Symptom.** After upgrading to 1.2, an existing project fails with an unhelpful
