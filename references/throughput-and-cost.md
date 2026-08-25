@@ -6,6 +6,10 @@ How to budget a run, and how to make it finish in hours rather than days.
 
 ## Where the savings come from
 
+Both levers below apply whichever provider you use, and they matter more than the choice of
+provider: deduplication routinely cuts the bill by an order of magnitude, which is a bigger
+factor than the 10x between Gemini and Claude.
+
 **Deduplication is the largest lever, by far.** Header, footer, navigation and cross-link
 blocks repeat on every page — a single string can occur hundreds of times across a site.
 Translate each unique string once and reuse it everywhere.
@@ -37,12 +41,42 @@ Script factor, roughly:
 | Devanagari, Thai, Bengali, Tamil | 3 – 4× |
 | CJK | 1.0 – 1.5× |
 
-Then apply your provider's per-million rate. With a low-cost tier model the per-locale cost
-of a mid-sized marketing site lands in the region of a few tens of cents — money is rarely
-the constraint here. **Review time is.**
+Then apply your provider's per-million rate. The default is Claude, which is **not** the
+cheapest option — it is the one the project is named for, and the tradeoff is worth stating
+plainly rather than burying.
 
-The Batch API halves cost and runs asynchronously. Worth it for a full rollout; not worth
-the added latency for a 3-locale pilot.
+Rates checked 2026-08-25, USD per million tokens:
+
+| Provider / model | In | Out | A mid-sized site, 20 locales |
+| --- | --- | --- | --- |
+| `gemini-2.5-flash-lite` | 0.10 | 0.40 | **~$2.40** |
+| `claude-haiku-4-5` *(default)* | 1 | 5 | **~$30** |
+| `claude-sonnet-5` | 3 | 15 | ~$90 |
+| `claude-opus-5` | 5 | 25 | ~$150 |
+| a local model via Ollama | — | — | **$0** |
+
+Those totals assume ~150k unique source words and Latin-script targets; scale by the table
+above for other scripts. Treat them as order-of-magnitude, not a quote.
+
+**So: money is a constraint here in a way it was not before 1.2.** If cost matters more
+than the last few percent of idiom, one line moves you:
+
+```json
+{ "provider": "gemini", "model": "gemini-2.5-flash-lite" }
+```
+
+and one line moves you to free, at the price of running the model yourself:
+
+```json
+{ "provider": "openai", "apiBaseUrl": "http://localhost:11434/v1", "model": "qwen2.5:14b" }
+```
+
+Whatever you pick, **review time is still the real constraint** — the pilot in the
+sequence below exists because layout problems and script-specific defects cost more to
+find late than any of these numbers.
+
+The Batch API halves cost on providers that offer one and runs asynchronously. Worth it
+for a full rollout; not worth the added latency for a 3-locale pilot.
 
 ## Batching
 
@@ -51,6 +85,8 @@ the added latency for a 3-locale pilot.
   batches just multiplies request count for no benefit.
 - Use `--batch 6` when re-translating units that already failed once: those are the long,
   awkward ones that hit output limits.
+- Smaller and local models want smaller batches. 40 units is tuned for hosted frontier
+  models; a 7B running on a laptop is more reliable at 8–10.
 
 ## Parallelism
 
@@ -65,7 +101,8 @@ node scripts/translate.mjs --lang ja,ko,zh,th --concurrency 8 &
 
 Wall-clock drops close to linearly with stream count. Around 32 concurrent requests has run
 cleanly without rate-limit errors on a paid tier; back off if you see 429s — the retry logic
-handles them, but they waste time.
+handles them, but they waste time. A local model is the exception: concurrency past what the
+GPU can hold makes it slower, not faster, so start at 2 and measure.
 
 Two rules for splitting:
 

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * i18n step 2 — translate extracted units with the Gemini API into a translation memory.
+ * i18n step 2 — translate extracted units into a translation memory.
  *
  *   node scripts/i18n/translate.mjs --lang es
- *   node scripts/i18n/translate.mjs --lang es,ru,pt-br --model gemini-3.5-flash-lite
+ *   node scripts/i18n/translate.mjs --lang es,ru --provider gemini --model gemini-2.5-flash-lite
+ *   node scripts/i18n/translate.mjs --lang es --provider openai   # local model via apiBaseUrl
  *   node scripts/i18n/translate.mjs --lang es --limit 150 --tag modelcmp   # sampling run
  *
  * Reads   i18n/source.json      (from extract.mjs)
@@ -28,9 +29,10 @@ import { fileURLToPath } from 'url';
 import {
   SOURCE_FILE as SRC_FILE, TM_DIR, LOCALES, RTL, DNT, MODEL as CFG_MODEL,
   ROOT_DIR as ROOT, SITE_NAME, SITE_DESCRIPTION, SOURCE_LANGUAGE,
+  PROVIDER as CFG_PROVIDER, API_BASE_URL, API_KEY_ENV, JSON_MODE, PRICING,
 } from './config.mjs';
 import { hint, link } from './credit.mjs';
-const API = 'https://generativelanguage.googleapis.com/v1beta/models';
+import { loadProvider, extractJson } from './providers/index.mjs';
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 
@@ -48,7 +50,8 @@ const LANGS = String(args.lang ?? '')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
-const MODEL = String(args.model ?? CFG_MODEL);
+const PROVIDER_NAME = args.provider ? String(args.provider) : CFG_PROVIDER;
+const MODEL_ARG = args.model ? String(args.model) : CFG_MODEL;
 const LIMIT = args.limit ? Number(args.limit) : Infinity;
 const TAG = args.tag ? `.${args.tag}` : '';
 const BATCH_UNITS = Number(args.batch ?? 40);
@@ -56,20 +59,41 @@ const CONCURRENCY = Number(args.concurrency ?? 12);
 const DRY = Boolean(args.dry);
 
 if (LANGS.length === 0) {
-  console.error('Usage: node scripts/i18n/translate.mjs --lang es[,ru,...] [--model M] [--limit N] [--tag T] [--dry]');
+  console.error(
+    'Usage: node scripts/i18n/translate.mjs --lang es[,ru,...] [--provider P] [--model M] [--limit N] [--tag T] [--dry]'
+  );
   process.exit(1);
 }
 
 // ── Key ──────────────────────────────────────────────────────────────────────
 
+const PROVIDER = await loadProvider({ provider: PROVIDER_NAME, model: MODEL_ARG, root: ROOT });
+const MODEL = MODEL_ARG ?? PROVIDER.defaultModel;
+
+/**
+ * The key, from the environment or a .env file, under whichever variable the resolved
+ * provider uses — or `apiKeyEnv` if the config names a different one. Providers that
+ * set `keyOptional` (the OpenAI-compatible adapter, because local servers do not
+ * authenticate) are allowed to proceed without one.
+ */
 function loadKey() {
-  if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
+  const names = API_KEY_ENV ? [API_KEY_ENV] : (PROVIDER.envKeys ?? []);
+  for (const name of names) if (process.env[name]) return process.env[name];
+
   const envFile = join(ROOT, '.env');
   if (existsSync(envFile)) {
-    const m = /^GEMINI_API_KEY=(.*)$/m.exec(readFileSync(envFile, 'utf8'));
-    if (m) return m[1].trim();
+    const text = readFileSync(envFile, 'utf8');
+    for (const name of names) {
+      const m = new RegExp(`^${name}=(.*)$`, 'm').exec(text);
+      if (m) return m[1].trim();
+    }
   }
-  console.error('GEMINI_API_KEY not found (env or .env).');
+
+  if (PROVIDER.keyOptional) return null;
+  console.error(
+    `No API key for ${PROVIDER.label ?? PROVIDER.id}. Set ${names.join(' or ')} in the ` +
+      `environment or .env, or set "apiKeyEnv" in i18n.config.json.`
+  );
   process.exit(1);
 }
 const KEY = loadKey();
@@ -144,15 +168,40 @@ function validate(source, translated) {
 
 // ── API ──────────────────────────────────────────────────────────────────────
 
-async function callGemini(langCode, items, attempt = 1) {
-  const body = {
-    systemInstruction: { parts: [{ text: systemPrompt(langCode) }] },
-    contents: [{ role: 'user', parts: [{ text: JSON.stringify(items) }] }],
-    generationConfig: {
-      temperature: attempt === 1 ? 0.2 : 0.4,
-      responseMimeType: 'application/json',
-      responseSchema: RESPONSE_SCHEMA,
-    },
+/**
+ * One request to whichever provider is loaded.
+ *
+ * The provider module owns three things and nothing else: how to build the request,
+ * how to read a response, and how to price it. Everything that made this function
+ * worth keeping — network-error retry, HTTP backoff, splitting a batch that was
+ * refused or truncated — is provider-agnostic and lives here, unchanged from the
+ * version that ran ten thousand units through Gemini.
+ *
+ * `usage` is normalised to { inTok, outTok } so the caller never sees a provider's
+ * own field names.
+ */
+async function callModel(langCode, items, attempt = 1, jsonMode = JSON_MODE) {
+  const { url, headers, body } = PROVIDER.request({
+    model: MODEL,
+    system: systemPrompt(langCode),
+    items,
+    temperature: attempt === 1 ? 0.2 : 0.4,
+    key: KEY,
+    baseUrl: API_BASE_URL,
+    jsonMode,
+  });
+
+  const split = async (why, mode = jsonMode) => {
+    const mid = Math.ceil(items.length / 2);
+    process.stderr.write(`  ${why} on ${items.length} units — splitting\n`);
+    const [a, b] = await Promise.all([
+      callModel(langCode, items.slice(0, mid), 1, mode),
+      callModel(langCode, items.slice(mid), 1, mode),
+    ]);
+    return {
+      rows: [...a.rows, ...b.rows],
+      usage: { inTok: a.usage.inTok + b.usage.inTok, outTok: a.usage.outTok + b.usage.outTok },
+    };
   };
 
   // Network-level failures (`TypeError: fetch failed` — DNS, reset connection, socket
@@ -162,11 +211,7 @@ async function callGemini(langCode, items, attempt = 1) {
   // parallel. Retry them on the same backoff as 429/5xx.
   let res;
   try {
-    res = await fetch(`${API}/${MODEL}:generateContent`, {
-      method: 'POST',
-      headers: { 'x-goog-api-key': KEY, 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
   } catch (err) {
     if (attempt <= 5) {
       const wait = Math.min(2 ** attempt * 1000, 30000);
@@ -174,76 +219,72 @@ async function callGemini(langCode, items, attempt = 1) {
         `  network error (${String(err.message ?? err).slice(0, 60)}), retry ${attempt} in ${wait}ms\n`
       );
       await new Promise((r) => setTimeout(r, wait));
-      return callGemini(langCode, items, attempt + 1);
+      return callModel(langCode, items, attempt + 1, jsonMode);
     }
     throw err;
   }
 
   if (!res.ok) {
     const text = await res.text();
+
+    // An OpenAI-compatible server that does not implement the structured-output form we
+    // asked for rejects the whole request. That is a capability gap, not a broken run:
+    // drop one rung of the ladder and retry. Placeholder validation still guards output.
+    if (PROVIDER.unsupportedJsonMode?.(res.status, text)) {
+      const next = (jsonMode ?? 'schema') === 'schema' ? 'object' : 'none';
+      if ((jsonMode ?? 'schema') !== 'none') {
+        process.stderr.write(
+          `  server rejected JSON mode "${jsonMode ?? 'schema'}" — retrying with "${next}"\n`
+        );
+        return callModel(langCode, items, attempt, next);
+      }
+    }
+
     const retryable = res.status === 429 || res.status >= 500;
     if (retryable && attempt <= 5) {
       const wait = Math.min(2 ** attempt * 1000, 30000);
       process.stderr.write(`  HTTP ${res.status}, retry ${attempt} in ${wait}ms\n`);
       await new Promise((r) => setTimeout(r, wait));
-      return callGemini(langCode, items, attempt + 1);
+      return callModel(langCode, items, attempt + 1, jsonMode);
     }
-    throw new Error(`Gemini HTTP ${res.status}: ${text.slice(0, 300)}`);
+    throw new Error(`${PROVIDER.label ?? PROVIDER.id} HTTP ${res.status}: ${text.slice(0, 300)}`);
   }
 
   const data = await res.json();
-  const part = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  const { text: part, usage, retryable, detail } = PROVIDER.parse(data);
+
+  // A safety filter rejects the WHOLE request, so one string it dislikes takes the other
+  // 39 in the batch with it (seen on Russian: PROHIBITED_CONTENT on a batch that
+  // translated fine once split). Halve and recurse so the blast radius is the offending
+  // unit alone, not the batch.
+  if (retryable === 'safety' && items.length > 1) return split(detail ?? 'safety block');
 
   if (!part) {
-    // The safety filter blocks the WHOLE request, so one string it dislikes takes the
-    // other 39 in the batch with it (seen on Russian: PROHIBITED_CONTENT on a batch that
-    // translated fine once split). Halve and recurse so the blast radius is the offending
-    // unit alone, not the batch.
-    const blocked = data?.promptFeedback?.blockReason;
-    if (blocked && items.length > 1) {
-      const mid = Math.ceil(items.length / 2);
-      process.stderr.write(`  ${blocked} on ${items.length} units — splitting\n`);
-      const [a, b] = await Promise.all([
-        callGemini(langCode, items.slice(0, mid)),
-        callGemini(langCode, items.slice(mid)),
-      ]);
-      return {
-        rows: [...a.rows, ...b.rows],
-        usage: {
-          promptTokenCount: (a.usage.promptTokenCount ?? 0) + (b.usage.promptTokenCount ?? 0),
-          candidatesTokenCount: (a.usage.candidatesTokenCount ?? 0) + (b.usage.candidatesTokenCount ?? 0),
-        },
-      };
-    }
+    if (retryable === 'safety') throw new Error(`Safety block on a single unit (${detail})`);
     throw new Error(`No content in response: ${JSON.stringify(data).slice(0, 300)}`);
   }
-
-  const usage = data.usageMetadata ?? {};
 
   // A batch whose combined translation exceeds the output limit comes back as TRUNCATED
   // JSON ("Unterminated string at position 68365"), taking all 40 units with it — that is
   // how Urdu lost a whole batch. Halve and recurse: the same content in two requests fits,
-  // and only a single oversized unit can end up unrecoverable.
+  // and only a single oversized unit can end up unrecoverable. Some providers say so via
+  // a stop reason; the rest are caught by the parse failing.
+  if (retryable === 'truncated' && items.length > 1) {
+    const half = await split('output limit reached');
+    return { rows: half.rows, usage: { inTok: usage.inTok + half.usage.inTok, outTok: usage.outTok + half.usage.outTok } };
+  }
+
   try {
-    return { rows: JSON.parse(part), usage };
+    const parsed = JSON.parse(extractJson(part));
+    const rows = PROVIDER.unwrap ? PROVIDER.unwrap(parsed) : parsed;
+    if (!Array.isArray(rows)) throw new Error('response was not an array of units');
+    return { rows, usage };
   } catch (err) {
     if (items.length > 1) {
-      const mid = Math.ceil(items.length / 2);
-      process.stderr.write(`  truncated JSON on ${items.length} units — splitting\n`);
-      const [a, b] = await Promise.all([
-        callGemini(langCode, items.slice(0, mid)),
-        callGemini(langCode, items.slice(mid)),
-      ]);
+      const half = await split('truncated JSON');
       return {
-        rows: [...a.rows, ...b.rows],
-        usage: {
-          promptTokenCount:
-            (usage.promptTokenCount ?? 0) + (a.usage.promptTokenCount ?? 0) + (b.usage.promptTokenCount ?? 0),
-          candidatesTokenCount:
-            (usage.candidatesTokenCount ?? 0) +
-            (a.usage.candidatesTokenCount ?? 0) +
-            (b.usage.candidatesTokenCount ?? 0),
-        },
+        rows: half.rows,
+        usage: { inTok: usage.inTok + half.usage.inTok, outTok: usage.outTok + half.usage.outTok },
       };
     }
     throw err;
@@ -284,7 +325,7 @@ async function translateLang(langCode, units) {
   const batches = [];
   for (let i = 0; i < pending.length; i += BATCH_UNITS) batches.push(pending.slice(i, i + BATCH_UNITS));
 
-  console.log(`${langCode}: ${pending.length} units to translate in ${batches.length} batches (model ${MODEL})`);
+  console.log(`${langCode}: ${pending.length} units to translate in ${batches.length} batches`);
   if (DRY) return;
 
   let done = 0;
@@ -315,14 +356,14 @@ async function translateLang(langCode, units) {
       let rows;
       let usage;
       try {
-        ({ rows, usage } = await callGemini(langCode, items));
+        ({ rows, usage } = await callModel(langCode, items));
       } catch (err) {
         failed += batch.length;
         failures.push({ batch: myIndex, error: String(err).slice(0, 200) });
         continue;
       }
-      inTok += usage.promptTokenCount ?? 0;
-      outTok += usage.candidatesTokenCount ?? 0;
+      inTok += usage.inTok;
+      outTok += usage.outTok;
 
       const byId = new Map(rows.map((r) => [r.id, r.text]));
 
@@ -339,10 +380,10 @@ async function translateLang(langCode, units) {
 
       for (const [hash, unit, problem] of retry) {
         try {
-          const solo = await callGemini(langCode, [{ id: 0, text: unit.text }]);
+          const solo = await callModel(langCode, [{ id: 0, text: unit.text }]);
           const out = solo.rows.find((r) => r.id === 0)?.text;
-          inTok += solo.usage.promptTokenCount ?? 0;
-          outTok += solo.usage.candidatesTokenCount ?? 0;
+          inTok += solo.usage.inTok;
+          outTok += solo.usage.outTok;
           if (!validate(unit.text, out)) {
             tm[hash] = out;
             continue;
@@ -366,13 +407,21 @@ async function translateLang(langCode, units) {
 
   flush();
 
-  const rate = MODEL.includes('flash-lite') ? [0.1, 0.4] : [0.3, 2.5];
-  const cost = (inTok / 1e6) * rate[0] + (outTok / 1e6) * rate[1];
+  // Token counts are always printed because they are measured. A cost is printed only
+  // when a rate is actually known — from the config, or the provider's own table. A
+  // hardcoded guess for somebody else's price list goes stale and misleads; the
+  // OpenAI-compatible adapter deliberately reports no rate at all, because it points at
+  // dozens of providers and some of them are a local model that costs nothing.
+  const rate = PRICING ?? PROVIDER.pricing?.(MODEL) ?? null;
 
   console.log(`  ${langCode}: ${Object.keys(tm).length} in memory, ${failed} failed`);
-  console.log(
-    `  tokens in/out: ${inTok.toLocaleString()} / ${outTok.toLocaleString()}  ≈ $${cost.toFixed(3)} (standard rate)`
-  );
+  const tokens = `  tokens in/out: ${inTok.toLocaleString()} / ${outTok.toLocaleString()}`;
+  if (rate) {
+    const cost = (inTok / 1e6) * rate[0] + (outTok / 1e6) * rate[1];
+    console.log(`${tokens}  ≈ $${cost.toFixed(3)} at $${rate[0]}/$${rate[1]} per Mtok`);
+  } else {
+    console.log(`${tokens}  (no rate known for this model — set "pricing" in i18n.config.json)`);
+  }
   if (failures.length) {
     writeFileSync(join(TM_DIR, `${langCode}${TAG}.failures.json`), JSON.stringify(failures, null, 2));
     console.log(`  wrote ${failures.length} failures → i18n/tm/${langCode}${TAG}.failures.json`);
@@ -390,6 +439,11 @@ const source = JSON.parse(readFileSync(SRC_FILE, 'utf8'));
 // Most-repeated units first, so a --limit sample covers the highest-impact copy.
 const units = Object.entries(source).slice(0, LIMIT === Infinity ? undefined : LIMIT);
 
+console.log(
+  `provider: ${PROVIDER.label ?? PROVIDER.id} · model: ${MODEL}` +
+    (PROVIDER_NAME ? '' : ' (inferred — set "provider" in i18n.config.json to pin it)') +
+    (API_BASE_URL ? ` · host: ${API_BASE_URL}` : '')
+);
 console.log(`source units: ${Object.keys(source).length.toLocaleString()}, selected: ${units.length.toLocaleString()}`);
 
 for (const lang of LANGS) {

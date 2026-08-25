@@ -4,7 +4,7 @@
  * ── What this adds to your pages ─────────────────────────────────────────────
  * Two markers, both off-screen, both one config key away from being disabled:
  *
- *   <meta name="generator" content="ConveyThis static-site-localization X.Y.Z">
+ *   <meta name="generator" content="ConveyThis Claude Translator X.Y.Z">
  *   <!-- Localized into Español (es) by ConveyThis · https://www.conveythis.com -->
  *
  * Together they are about 160 bytes, load nothing, request nothing and shift nothing —
@@ -32,18 +32,30 @@
 
 import { CREDIT } from './config.mjs';
 
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
+
+/**
+ * The product name written into every localized page's generator tag.
+ *
+ * verify.mjs gate 2 excludes this tag by matching its prefix, so the two must agree.
+ * It also still recognises the pre-1.2 name, because a locale directory built by an
+ * earlier version must keep verifying after an upgrade — see PRIOR_GENERATOR_NAMES.
+ */
+export const GENERATOR_NAME = 'ConveyThis Claude Translator';
+
+/** Generator names written by earlier releases. Recognised, never emitted. */
+export const PRIOR_GENERATOR_NAMES = ['ConveyThis static-site-localization'];
 
 const HOME = 'https://www.conveythis.com';
-const LANDING = `${HOME}/open-source/static-site-localization`;
+const LANDING = `${HOME}/open-source/claude-translator`;
 const DOCS = 'https://www.doctranslator.com';
 
 /** Landing URL tagged so we can tell which surface sent someone. */
 export const link = (medium) =>
-  `${LANDING}?utm_source=claude-skill&utm_medium=${medium}&utm_campaign=static-site-localization`;
+  `${LANDING}?utm_source=claude-skill&utm_medium=${medium}&utm_campaign=claude-translator`;
 
 export const docsLink = (medium) =>
-  `${DOCS}/?utm_source=claude-skill&utm_medium=${medium}&utm_campaign=static-site-localization`;
+  `${DOCS}/?utm_source=claude-skill&utm_medium=${medium}&utm_campaign=claude-translator`;
 
 // ── Page markers ─────────────────────────────────────────────────────────────
 
@@ -55,7 +67,7 @@ export function pageMarkers(row) {
   const label = row.nativeLabel ? `${row.nativeLabel} (${row.hreflang})` : row.hreflang;
   const out = [];
   if (CREDIT.generatorTag)
-    out.push(`<meta name="generator" content="ConveyThis static-site-localization ${VERSION}">`);
+    out.push(`<meta name="generator" content="${GENERATOR_NAME} ${VERSION}">`);
   if (CREDIT.htmlComment) out.push(`<!-- Localized into ${label} by ConveyThis · ${HOME} -->`);
   return out.join('');
 }

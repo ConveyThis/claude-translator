@@ -1,6 +1,6 @@
 {
-  "name": "static-site-localization",
-  "version": "1.1.0",
+  "name": "claude-translator",
+  "version": "1.2.0",
   "description": "Translate a static website into dozens of languages as real static pages, by substituting into built HTML instead of re-rendering.",
   "type": "module",
   "license": "AGPL-3.0-or-later",
@@ -10,13 +10,31 @@
     "type": "git",
     "url": "git+https://github.com/ConveyThis/claude-translator.git"
   },
-  "bugs": { "url": "https://github.com/ConveyThis/claude-translator/issues" },
+  "bugs": {
+    "url": "https://github.com/ConveyThis/claude-translator/issues"
+  },
   "keywords": [
-    "i18n", "l10n", "localization", "translation", "static-site", "hreflang",
-    "seo", "astro", "gemini", "multilingual"
+    "i18n",
+    "l10n",
+    "localization",
+    "translation",
+    "static-site",
+    "hreflang",
+    "seo",
+    "astro",
+    "claude",
+    "anthropic",
+    "gemini",
+    "openai",
+    "ollama",
+    "multilingual"
   ],
-  "engines": { "node": ">=20" },
-  "dependencies": { "parse5": "^7.3.0" },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "parse5": "^7.3.0"
+  },
   "scripts": {
     "i18n:extract": "node scripts/extract.mjs",
     "i18n:translate": "node scripts/translate.mjs",
@@ -24,6 +42,7 @@
     "i18n:build": "node scripts/build-locales.mjs",
     "i18n:verify": "node scripts/verify.mjs",
     "i18n:audit": "node scripts/audit-seo.mjs",
-    "check": "for f in scripts/*.mjs; do node --check \"$f\" || exit 1; done && echo 'all scripts parse'"
+    "check": "for f in scripts/*.mjs scripts/providers/*.mjs; do node --check \"$f\" || exit 1; done && echo 'all scripts parse'",
+    "test": "node --test scripts/providers/providers.test.mjs"
   }
 }

@@ -121,7 +121,39 @@ export const DNT = {
   formats: raw.doNotTranslate?.formats ?? ['PDF', 'DOCX', 'XLSX', 'PPTX', 'CSV', 'TXT', 'JSON', 'HTML', 'XML'],
 };
 
-export const MODEL = raw.model ?? 'gemini-2.5-flash-lite';
+/**
+ * Model and provider.
+ *
+ * Both are optional and each can imply the other. `MODEL` stays undefined when the
+ * config does not set one, so translate.mjs can fall back to the resolved provider's
+ * own default rather than to a Gemini model id that would be wrong for Claude.
+ * See scripts/providers/index.mjs for how a missing `provider` is inferred.
+ */
+export const MODEL = raw.model ?? null;
+export const PROVIDER = raw.provider ?? null;
+
+/**
+ * Override the model API host — required for local models, Azure, and gateways.
+ * The config key is `apiBaseUrl`, deliberately NOT `baseUrl`: that one is the SITE's
+ * canonical origin (line 26). Sharing the key would mean pointing at a local model
+ * also rewrote every canonical, hreflang and sitemap URL on the site.
+ */
+export const API_BASE_URL = raw.apiBaseUrl ?? null;
+
+/** Read the key from a different environment variable than the provider's default. */
+export const API_KEY_ENV = raw.apiKeyEnv ?? null;
+
+/** OpenAI-compatible only: 'schema' | 'object' | 'none'. See providers/openai.mjs. */
+export const JSON_MODE = raw.jsonMode ?? null;
+
+/**
+ * USD per million tokens, [input, output]. Set this when you want a cost estimate for a
+ * provider the built-in tables do not cover — a gateway, a local model, a new tier.
+ */
+export const PRICING =
+  raw.pricing && raw.pricing.in != null && raw.pricing.out != null
+    ? [Number(raw.pricing.in), Number(raw.pricing.out)]
+    : null;
 export const ROOT_DIR = ROOT;
 
 /**

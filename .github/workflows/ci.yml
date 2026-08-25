@@ -20,11 +20,14 @@ jobs:
 
       - name: Every script parses
         run: |
-          for f in scripts/*.mjs; do
+          for f in scripts/*.mjs scripts/providers/*.mjs; do
             node --check "$f" || { echo "::error file=$f::syntax error"; exit 1; }
           done
           bash -n scripts/finalize.sh
           echo "all scripts parse"
+
+      - name: Provider contract tests
+        run: npm test
 
       - name: Example config is valid JSON
         run: |
