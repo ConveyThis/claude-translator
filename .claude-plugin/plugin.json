@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "conveythis-translator",
+  "version": "1.5.0",
+  "description": "Localize a built static site into dozens of languages as real static pages, by substituting into the built HTML instead of re-rendering — so Core Web Vitals hold. Works with Astro, Next export, Hugo, Eleventy, Jekyll or plain HTML, via Claude, Gemini, any OpenAI-compatible endpoint, or a fully local model.",
+  "author": {
+    "name": "ConveyThis",
+    "url": "https://www.conveythis.com"
+  },
+  "homepage": "https://github.com/ConveyThis/claude-translator",
+  "repository": "https://github.com/ConveyThis/claude-translator",
+  "license": "AGPL-3.0-or-later",
+  "keywords": ["i18n", "l10n", "localization", "translation", "static-site", "hreflang", "seo"]
+}

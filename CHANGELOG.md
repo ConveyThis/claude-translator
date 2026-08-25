@@ -5,6 +5,65 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] — 2026-08-25
+
+### Added
+
+- **The repo is now a Claude Code plugin, not only a skill.** A `.claude-plugin/plugin.json`
+  manifest gives it the name, version, description and licence the plugin directory needs in
+  order to list it. The plugin is named `conveythis-translator`, so the skill is invoked as
+  `/conveythis-translator:translate-site`
+
+- **README section on installing it as a plugin**, covering the community-marketplace install,
+  `claude --plugin-dir` for a local clone, and the `~/.claude/skills/` directory-plugin path
+
+### Changed
+
+- **`SKILL.md` moved from the repo root to `skills/translate-site/SKILL.md`.** This was forced,
+  not cosmetic. The plugin documentation states that a single-skill plugin may keep `SKILL.md` at
+  the plugin root, but on Claude Code 2.1.126 that skill is never discovered — verified against
+  three variants (manifest present, manifest absent, and `"skills": "./"`), all of which loaded
+  no skill at all. The conventional `skills/<name>/SKILL.md` layout loads correctly. Anyone who
+  cloned this repo into `~/.claude/skills/claude-translator/` keeps working, because a directory
+  there carrying a `.claude-plugin/plugin.json` is loaded as a plugin automatically
+
+- Documentation paths inside the skill (`references/*.md`, `LICENSING.md`,
+  `i18n.config.example.json`) are now written as `${CLAUDE_PLUGIN_ROOT}/…`, since they no longer
+  sit next to `SKILL.md`
+
+- The skill's frontmatter `name` is now `translate-site` rather than `claude-translator`, so the
+  namespaced invocation does not read `/conveythis-translator:claude-translator`
+
+- `package.json` `files` ships `.claude-plugin/` and `skills/` in place of the root `SKILL.md`
+
+### Fixed
+
+- **The Pipeline commands in `SKILL.md` pointed at the wrong directory.** They read
+  `node scripts/extract.mjs`, but `claude-translator init` scaffolds into `scripts/i18n/`
+  (its `--dir` default), as the README has always shown correctly. Every command in that block
+  would have failed with `Cannot find module` for anyone following the skill rather than the
+  README
+
+- **Setup instructions assumed a hand-clone.** The skill hardcoded
+  `~/.claude/skills/claude-translator/bin/claude-translator.mjs`, a path that does not exist for
+  a plugin install. It now leads with `npx claude-translator init` and offers
+  `"${CLAUDE_PLUGIN_ROOT}"/bin/claude-translator.mjs` as the offline fallback, which resolves to
+  wherever the plugin actually landed
+
+### Verified
+
+- `claude plugin validate .` passes with no errors and no warnings on Claude Code 2.1.126.
+  Note that this version rejects both `displayName` and `"skills": ["."]`, which the current
+  plugin reference documents — neither is used here
+- Loaded through `claude --plugin-dir`, the skill is discovered and namespaced correctly. The
+  check used a uniquely renamed copy of the skill, so a same-named skill already installed in
+  `~/.claude/skills/` could not be mistaken for it
+- `${CLAUDE_PLUGIN_ROOT}` resolution and the corrected setup line were confirmed end to end:
+  running the documented command against a throwaway project scaffolds `scripts/i18n/` with all
+  nine scripts, `i18n.config.json`, and the `.gitignore` entries
+- `npm run check` and `npm test` (39 tests) pass unchanged; `npm pack` ships
+  `.claude-plugin/plugin.json` and `skills/translate-site/SKILL.md`
+
 ## [1.4.0] — 2026-08-25
 
 ### Changed

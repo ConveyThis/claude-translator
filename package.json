@@ -1,6 +1,6 @@
 {
   "name": "claude-translator",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Translate a static website into dozens of languages as real static pages, by substituting into built HTML instead of re-rendering.",
   "type": "module",
   "license": "AGPL-3.0-or-later",
@@ -36,10 +36,11 @@
     "claude-translator": "bin/claude-translator.mjs"
   },
   "files": [
+    ".claude-plugin",
     "bin",
     "scripts",
     "references",
-    "SKILL.md",
+    "skills",
     "LICENSING.md",
     "CHANGELOG.md",
     "i18n.config.example.json"
