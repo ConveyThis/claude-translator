@@ -99,16 +99,15 @@ The builder restores the original tags by index.
 
 ```bash
 # 1. Install into your project
-git clone https://github.com/ConveyThis/claude-translator.git
-cp -r claude-translator/scripts  <your-project>/scripts/i18n
-cd <your-project> && npm install --save-dev parse5
+cd <your-project>
+npx claude-translator init
+npm install                       # parse5, the only dependency
 
-# 2. Configure
-cp ../claude-translator/i18n.config.example.json i18n.config.json
+# 2. Configure — baseUrl, locales, provider
 $EDITOR i18n.config.json
 
-# 3. Provide your key (or skip entirely for a local model)
-echo "ANTHROPIC_API_KEY=your-key-here" >> .env    # make sure .env is gitignored
+# 3. Provide your key (skip entirely for a local model)
+echo "ANTHROPIC_API_KEY=your-key-here" >> .env    # .gitignore this
 
 # 4. Run
 npm run build                                        # your normal build
@@ -120,6 +119,29 @@ node scripts/i18n/audit-seo.mjs                      # full SEO audit
 ```
 
 Deploy the resulting build directory exactly as you deploy it today.
+
+`init` copies the pipeline into `scripts/i18n/`, writes a config, declares `parse5`, and adds
+the derived `i18n/` paths to `.gitignore`. It **never overwrites anything without `--force`**
+and prints every file it touched. `--dir <path>` puts the scripts somewhere else.
+
+<details>
+<summary>Installing without npx</summary>
+
+```bash
+git clone https://github.com/ConveyThis/claude-translator.git
+cp -r claude-translator/scripts  <your-project>/scripts/i18n
+cp claude-translator/i18n.config.example.json <your-project>/i18n.config.json
+cd <your-project> && npm install --save-dev parse5
+```
+
+Or run the scaffolder straight from the clone:
+`node claude-translator/bin/claude-translator.mjs init`
+
+</details>
+
+The scripts are copied into your project rather than run from `node_modules` on purpose: they
+resolve `parse5` and every relative path from the project they live in, they are short enough to
+read, and this is AGPL software whose point is that you can change them.
 
 ---
 
@@ -340,8 +362,8 @@ git clone https://github.com/ConveyThis/claude-translator.git \
   ~/.claude/skills/claude-translator
 ```
 
-Then ask Claude to "localize this site" and it will follow `SKILL.md`, including the
-failure modes documented in `references/`.
+Then ask Claude to "localize this site". It follows `SKILL.md`, including the failure modes in
+`references/` and the routing rules for when this is the wrong tool entirely.
 
 ---
 

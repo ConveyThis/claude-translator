@@ -14,7 +14,7 @@ argument-hint: "[project-dir]"
 license: AGPL-3.0
 metadata:
   author: ConveyThis
-  version: "1.2.0"
+  version: "1.3.0"
   category: i18n
 ---
 
@@ -97,19 +97,21 @@ do not take the same parameters and guessing costs money.
 ## Setup
 
 ```bash
-cp ~/.claude/skills/claude-translator/scripts/*.mjs   <project>/scripts/
-cp ~/.claude/skills/claude-translator/scripts/*.sh    <project>/scripts/
-cp ~/.claude/skills/claude-translator/i18n.config.example.json <project>/i18n.config.json
-cd <project> && npm i -D parse5          # the only dependency
+cd <project>
+node ~/.claude/skills/claude-translator/bin/claude-translator.mjs init
+npm install                              # parse5, the only dependency
 ```
+
+That copies the pipeline into `scripts/i18n/`, writes `i18n.config.json`, declares
+`parse5` and adds the derived paths to `.gitignore`. It never overwrites without
+`--force`, so it is safe to re-run; `--dir <path>` puts the scripts elsewhere.
 
 Scripts run **from inside the project** so `parse5` and relative paths resolve. Edit
 `i18n.config.json` — five keys cover everything; see `i18n.config.example.json`.
 
-Add to `.gitignore`: `i18n/source.json`, `i18n/manifest.json`, `i18n/segments/`,
-`i18n/tm/*.failures.json`, `i18n/tm/*.review.json`, and `i18n` in `.prettierignore`.
-**Commit `i18n/tm/{lang}.json`** — the memory is the asset; losing it means paying for a
-full re-translation.
+**Commit `i18n/tm/{lang}.json`.** The scaffolder deliberately does not ignore it: the
+memory is the asset, and losing it means paying for a full re-translation. Everything
+else under `i18n/` is derived and is ignored for you. Add `i18n` to `.prettierignore`.
 
 ## Pipeline
 

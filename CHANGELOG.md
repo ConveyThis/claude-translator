@@ -5,6 +5,29 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-08-25
+
+### Added
+
+- **`npx claude-translator init`** — a scaffolder that replaces the four manual install
+  steps. Copies the pipeline into `scripts/i18n/` (or `--dir`), writes `i18n.config.json`,
+  declares `parse5`, and appends the derived `i18n/` paths to `.gitignore`. It never
+  overwrites without `--force` and prints every path it touched
+- `--help`, `--version`, `--dir`, `--force`
+- **12 CLI contract tests** (`npm test`) covering the refusal to install outside a Node
+  project, idempotency, `--force`, `--dir`, appending rather than replacing an existing
+  `.gitignore`, and that `package.json` "files" actually ships what `init` copies
+- CI now packs the tarball, installs it into a scratch project and runs `init`, so a
+  broken published package fails the build rather than a user's first command
+
+### Changed
+
+- `parse5` moved from `dependencies` to `devDependencies`. Nothing in the published
+  package needs it at runtime — the CLI only copies files — so `npx` no longer downloads
+  it. A clone plus `npm install` is unaffected
+- `package.json` gained a `files` allowlist, so the tarball carries the scripts,
+  references, `SKILL.md` and the example config, and nothing else
+
 ## [1.2.0] — 2026-08-25
 
 Renamed to **Claude Translator**, and the translation step is no longer tied to one vendor.
@@ -106,6 +129,7 @@ into dozens of languages.
   and cost, and adapting to other static site generators
 - `SKILL.md`, so the repository can be installed directly as a Claude Code skill
 
+[1.3.0]: https://github.com/ConveyThis/claude-translator/releases/tag/v1.3.0
 [1.2.0]: https://github.com/ConveyThis/claude-translator/releases/tag/v1.2.0
 [1.1.0]: https://github.com/ConveyThis/claude-translator/releases/tag/v1.1.0
 [1.0.0]: https://github.com/ConveyThis/claude-translator/releases/tag/v1.0.0
