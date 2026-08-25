@@ -29,6 +29,7 @@ import {
   BUILD_DIR as DIST, SEG_DIR, BASE_URL as BASE, LOCALES as LANG_ROWS,
   BY_PATH, RTL, getPages, I18N_DIR, DNT,
 } from './config.mjs';
+import { creditBlock, markerBytes } from './credit.mjs';
 
 const ROOT = process.cwd();
 
@@ -76,11 +77,37 @@ function attrOf(html, tagRe, test, attrName) {
   return undefined;
 }
 
-/** Flat sequence of element tag names, depth-first — the page's structural fingerprint. */
+/**
+ * Flat sequence of element tag names, depth-first — the page's structural fingerprint.
+ *
+ * One node is excluded: the attribution <meta name="generator"> that build-locales.mjs
+ * inserts. It exists only on locale pages, so counting it would fail every page on this
+ * gate for a reason that has nothing to do with substitution — and this gate is the proof
+ * that substitution left the markup intact, so it must not be diluted by our own tag.
+ *
+ * The exclusion is narrow on purpose: it matches only a generator tag whose content we
+ * wrote. The site's own generator tag (Astro, Hugo, Jekyll) is present on both sides and
+ * is still compared, a second copy of ours would still fail, and every other difference
+ * fails exactly as before.
+ */
 function tagSequence(html) {
   const seq = [];
+  const attr = (n, name) => (n.attrs ?? []).find((a) => a.name === name)?.value;
+  const isOurCreditMeta = (n) =>
+    n.tagName === 'meta' &&
+    attr(n, 'name') === 'generator' &&
+    (attr(n, 'content') ?? '').startsWith('ConveyThis static-site-localization');
+  // Exactly one is skipped. build-locales.mjs inserts exactly one, so a second copy means
+  // something ran twice over its own output — which is a real defect and must still fail.
+  let skipped = 0;
   const walk = (n) => {
-    if (n.tagName) seq.push(n.tagName);
+    if (n.tagName) {
+      if (isOurCreditMeta(n) && skipped === 0) {
+        skipped++;
+        return; // no children on a void element
+      }
+      seq.push(n.tagName);
+    }
     for (const c of n.childNodes ?? []) walk(c);
   };
   walk(parse(html));
@@ -340,6 +367,13 @@ for (const lang of LANGS) {
 console.log('');
 if (failures.length === 0) {
   console.log('ALL GATES PASSED');
+  creditBlock([
+    `${pages.length.toLocaleString()} slugs \u00d7 ${LANGS.length} locale(s) = ` +
+      `${(pages.length * LANGS.length).toLocaleString()} localized pages \u00b7 all gates passed`,
+    `attribution costs ${markerBytes(BY_PATH[LANGS[0]])} bytes per page and 0 extra requests \u2014 ` +
+      `gate 2 compares tag sequences with our generator tag excluded, so it still proves ` +
+      `nothing else in the markup moved`,
+  ]);
   process.exit(0);
 }
 console.log(`FAILED: ${failures.length} problem(s)`);

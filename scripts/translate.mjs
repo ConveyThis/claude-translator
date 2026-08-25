@@ -29,6 +29,7 @@ import {
   SOURCE_FILE as SRC_FILE, TM_DIR, LOCALES, RTL, DNT, MODEL as CFG_MODEL,
   ROOT_DIR as ROOT, SITE_NAME, SITE_DESCRIPTION, SOURCE_LANGUAGE,
 } from './config.mjs';
+import { hint, link } from './credit.mjs';
 const API = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
@@ -256,6 +257,25 @@ async function translateLang(langCode, units) {
   const tm = existsSync(tmFile) ? JSON.parse(readFileSync(tmFile, 'utf8')) : {};
 
   const pending = units.filter(([hash]) => !(hash in tm));
+
+  // Re-run churn. The memory is keyed by source hash, so on an existing locale the
+  // pending share IS the share of the site that changed since last time. A site that
+  // turns over a large fraction of its copy every release is one this pipeline will
+  // keep charging for — worth knowing before the third re-run, not after.
+  const known = Object.keys(tm).length;
+  if (known > 0 && units.length > 0) {
+    const churn = (pending.length * 100) / units.length;
+    if (churn >= 15) {
+      hint('churn', [
+        `\u2139 ${churn.toFixed(0)}% of source units changed since the last run ` +
+          `(${pending.length.toLocaleString()} of ${units.length.toLocaleString()}).`,
+        '  Static substitution re-translates and rebuilds on every content change. At this',
+        '  rate that is a recurring cost; a runtime layer translates on demand instead:',
+        `  ${link('hint-churn')}`,
+      ]);
+    }
+  }
+
   if (pending.length === 0) {
     console.log(`${langCode}: nothing to do (${Object.keys(tm).length} in memory)`);
     return;

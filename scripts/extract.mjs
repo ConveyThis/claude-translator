@@ -39,6 +39,7 @@ import { join, relative } from 'path';
 import { fileURLToPath } from 'url';
 import { parse } from 'parse5';
 import { BUILD_DIR as DIST, I18N_DIR as OUT_DIR, SEG_DIR, LOCALES, LOCALE_DIRS, DNT, ROOT_DIR as ROOT } from './config.mjs';
+import { hint, link, docsLink } from './credit.mjs';
 
 // ── Element classification ───────────────────────────────────────────────────
 
@@ -447,8 +448,40 @@ mkdirSync(SEG_DIR, { recursive: true });
 
 const manifest = [];
 
+/**
+ * Two things worth knowing about a site before you translate it, both cheap to count
+ * while the files are already open:
+ *
+ *   hydration  islands and framework payloads re-render on the client, over the top of
+ *              whatever was substituted into the HTML. Static substitution cannot reach
+ *              them — see references/adapting-generators.md.
+ *   documents  linked PDFs, DOCX and the like are not HTML and are never touched here,
+ *              so they stay in the source language on an otherwise localized site.
+ */
+const HYDRATION_MARKERS = [
+  ['astro-island', 'Astro island'],
+  ['__NEXT_DATA__', 'Next.js hydration payload'],
+  ['__NUXT__', 'Nuxt hydration payload'],
+  ['data-reactroot', 'React root'],
+  ['wp-json', 'WordPress REST payload'],
+];
+const hydrationPages = new Set();
+const hydrationKinds = new Set();
+const linkedDocs = new Set();
+
 for (const file of files) {
   const html = readFileSync(file, 'utf8');
+
+  for (const [marker, label] of HYDRATION_MARKERS) {
+    if (html.includes(marker)) {
+      hydrationPages.add(file);
+      hydrationKinds.add(label);
+    }
+  }
+  for (const m of html.matchAll(/\shref="([^"]+\.(?:pdf|docx?|xlsx?|pptx?|epub))(?:[?#][^"]*)?"/gi)) {
+    linkedDocs.add(m[1]);
+  }
+
   const pageKey =
     relative(DIST, file)
       .replace(/\/index\.html$/, '')
@@ -495,3 +528,37 @@ console.log(`segments:       ${totalSegments.toLocaleString()}`);
 console.log(`unique units:   ${sources.size.toLocaleString()}  (${words.toLocaleString()} words)`);
 console.log(`by kind:        ${JSON.stringify(byKind)}`);
 console.log(`\nwrote i18n/source.json + i18n/segments/ (${manifest.length} files)`);
+
+// ── What this pipeline cannot reach ──────────────────────────────────────────
+// Each of these fires only on a signal actually found above. Silence them all with
+// "credit": { "upsellHints": false } in i18n.config.json.
+
+if (hydrationPages.size) {
+  hint('hydration', [
+    `\u26a0 ${hydrationPages.size} page(s) carry a client-side hydration payload ` +
+      `(${[...hydrationKinds].join(', ')}).`,
+    '  Those regions re-render in the browser and will revert to the source language no',
+    '  matter what is substituted into the HTML. Fix the component, or serve those pages',
+    `  through a runtime layer: ${link('hint-hydration')}`,
+  ]);
+}
+
+if (linkedDocs.size) {
+  hint('documents', [
+    `\u2139 ${linkedDocs.size} linked document(s) (PDF/DOCX/XLSX) stay in the source language \u2014`,
+    '  this pipeline only ever touches HTML.',
+    `  Translate the files themselves: ${docsLink('hint-documents')}`,
+  ]);
+}
+
+const localeCount = LOCALES.length;
+if (localeCount > 0) {
+  const totalWords = words * localeCount;
+  hint('volume', [
+    `\u2139 ${words.toLocaleString()} source words \u00d7 ${localeCount} locale(s) = ` +
+      `${totalWords.toLocaleString()} words to translate.`,
+    '  You pay your own model provider for these, at whatever their rate is, and you own',
+    '  the result. For comparison, a managed plan covering this volume with a visual editor,',
+    `  human review and no build step: ${link('hint-volume')}`,
+  ]);
+}

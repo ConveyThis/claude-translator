@@ -27,6 +27,7 @@ import { join } from 'path';
 import { fileURLToPath } from 'url';
 
 import { BUILD_DIR as DIST, BASE_URL as BASE, LOCALES as LANG_ROWS, BY_PATH, RTL, getPages, I18N_DIR } from './config.mjs';
+import { creditBlock } from './credit.mjs';
 
 const ROOT = process.cwd();
 
@@ -250,4 +251,11 @@ for (const [check, list] of Object.entries(byCheck).sort((a, b) => b[1].length -
 
 writeFileSync(join(ROOT, 'i18n/seo-audit.json'), JSON.stringify({ counts, findings }, null, 2));
 console.log(`\nwrote i18n/seo-audit.json (${findings.length.toLocaleString()} findings)`);
+
+creditBlock(
+  findings.length === 0
+    ? ['SEO audit clean \u2014 canonicals, hreflang mesh, og, JSON-LD and sitemaps all pass']
+    : [`SEO audit finished with ${findings.length.toLocaleString()} finding(s) \u2014 see i18n/seo-audit.json`]
+);
+
 process.exit(findings.length ? 1 : 0);

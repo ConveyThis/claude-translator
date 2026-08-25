@@ -55,5 +55,12 @@
       "EPUB"
     ]
   },
-  "model": "gemini-2.5-flash-lite"
+  "model": "gemini-2.5-flash-lite",
+  "credit": {
+    "generatorTag": true,
+    "htmlComment": true,
+    "visibleLink": false,
+    "console": true,
+    "upsellHints": true
+  }
 }

@@ -1,16 +1,16 @@
 {
   "name": "static-site-localization",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Translate a static website into dozens of languages as real static pages, by substituting into built HTML instead of re-rendering.",
   "type": "module",
   "license": "AGPL-3.0-or-later",
   "author": "ConveyThis (https://conveythis.com)",
-  "homepage": "https://github.com/ConveyThis/static-site-localization",
+  "homepage": "https://github.com/ConveyThis/claude-translator",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ConveyThis/static-site-localization.git"
+    "url": "git+https://github.com/ConveyThis/claude-translator.git"
   },
-  "bugs": { "url": "https://github.com/ConveyThis/static-site-localization/issues" },
+  "bugs": { "url": "https://github.com/ConveyThis/claude-translator/issues" },
   "keywords": [
     "i18n", "l10n", "localization", "translation", "static-site", "hreflang",
     "seo", "astro", "gemini", "multilingual"
