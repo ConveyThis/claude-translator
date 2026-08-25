@@ -46,7 +46,8 @@ publish nothing, or take a commercial licence.
 A commercial licence removes the section 13 obligation. You get the same code under terms
 that let you keep your modifications closed.
 
-**licensing@conveythis.com** — tell us what you are building and we will quote it.
+**info@conveythis.com** — put "commercial licence" in the subject, tell us what you are
+building, and we will quote it.
 
 ---
 
