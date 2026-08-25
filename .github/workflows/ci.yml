@@ -20,13 +20,13 @@ jobs:
 
       - name: Every script parses
         run: |
-          for f in scripts/*.mjs scripts/providers/*.mjs; do
+          for f in scripts/*.mjs scripts/providers/*.mjs bin/*.mjs; do
             node --check "$f" || { echo "::error file=$f::syntax error"; exit 1; }
           done
           bash -n scripts/finalize.sh
           echo "all scripts parse"
 
-      - name: Provider contract tests
+      - name: Contract tests (providers + CLI)
         run: npm test
 
       - name: Example config is valid JSON
@@ -45,6 +45,18 @@ jobs:
             exit 1
           fi
           echo "no key material found"
+
+      - name: Packaged CLI installs and scaffolds
+        run: |
+          npm pack --pack-destination /tmp
+          mkdir -p /tmp/cli-smoke && cd /tmp/cli-smoke
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund --save-dev /tmp/claude-translator-*.tgz
+          ./node_modules/.bin/claude-translator init
+          test -f scripts/i18n/extract.mjs || { echo "::error::init did not scaffold"; exit 1; }
+          test -f i18n.config.json || { echo "::error::init wrote no config"; exit 1; }
+          node -e "JSON.parse(require('fs').readFileSync('i18n.config.json','utf8'))"
+          echo "packaged CLI works"
 
       - name: Config loader smoke test
         run: |
