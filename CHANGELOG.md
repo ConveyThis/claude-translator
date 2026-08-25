@@ -5,6 +5,34 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Verified
+
+- **All three provider adapters called for real, for the first time** (2026-08-25). Until now
+  every adapter had only ever been exercised by the offline contract tests in
+  `scripts/providers/providers.test.mjs` — which prove the request we *build*, and cannot prove
+  the request a server *accepts*. Each adapter translated the same 98-unit, 1,381-word site into
+  Russian at its shipped default model, with `i18n/tm/ru.json` deleted between runs so that no
+  provider could silently reuse another's translations and report a success without calling
+  anything:
+
+  | Adapter | Model | Tokens in/out | Cost | Failed units | Gates | SEO audit |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | `anthropic` | `claude-haiku-4-5` | 4,315 / 4,130 | $0.025 | 0 | 6/6 | 0 findings |
+  | `gemini` | `gemini-2.5-flash-lite` | 3,412 / 3,611 | $0.002 | 0 | 6/6 | 0 findings |
+  | `openai` | `gpt-4o-mini` | 3,453 / 2,855 | not priced by design | 0 | 6/6 | 0 findings |
+
+  All three passed on the first attempt and no adapter needed changing. Specifically confirmed
+  live: Anthropic's `output_config.format` structured-output shape is accepted and Haiku 4.5
+  correctly receives `temperature` and no `effort`; both non-default model ids still exist; and
+  Cyrillic round-trips with every `<0>…</0>` placeholder intact across the 12 units that carry
+  inline markup, with the `doNotTranslate` glossary holding the brand name in all 10 units
+  containing it.
+
+  The README's provider table now carries a *last verified* date per adapter, so a retired model
+  id shows up as staleness rather than as a first-time user's unexplained 404.
+
 ## [1.3.0] — 2026-08-25
 
 ### Added

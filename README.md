@@ -276,15 +276,31 @@ purging is destructive and its heuristics have known blind spots.
 The translation step is the only part that talks to a model, and it talks through a small
 adapter. Three ship with the project, and anything else is one file.
 
-| `provider` | Default model | Key |
-| --- | --- | --- |
-| `anthropic` *(default)* | `claude-haiku-4-5` | `ANTHROPIC_API_KEY` |
-| `gemini` | `gemini-2.5-flash-lite` | `GEMINI_API_KEY` |
-| `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` |
-| `./my-provider.mjs` | — | yours |
+| `provider` | Default model | Key | Last verified against the live API |
+| --- | --- | --- | --- |
+| `anthropic` *(default)* | `claude-haiku-4-5` | `ANTHROPIC_API_KEY` | 2026-08-25 |
+| `gemini` | `gemini-2.5-flash-lite` | `GEMINI_API_KEY` | 2026-08-25 |
+| `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` | 2026-08-25 |
+| `./my-provider.mjs` | — | yours | — |
 
 Omit `provider` and it is inferred from the model id, so configs written before 1.2 keep
 working unchanged.
+
+**What "verified" means in that last column.** On 2026-08-25 each of the three adapters
+translated the same 98-unit, 1,381-word English site into Russian at its default model, as a
+real billed API call, with the translation memory deleted between runs so no provider could
+reuse another's work. Every run cleared all six gates in `verify.mjs` and produced a clean
+`audit-seo.mjs` — 0 findings — and no run had a single failed unit. Measured cost: $0.025
+(Claude), $0.002 (Gemini), and 3,453/2,855 tokens on OpenAI, which the adapter deliberately
+does not price because it points at dozens of endpoints, some of them free and local.
+
+The three memories agreed on only 28–36% of units pairwise, and the ones all three agreed on
+were short labels like "Три плана". That divergence is the evidence the runs were independent.
+
+This column is a freshness marker, not a guarantee. Model ids get retired; if a default stops
+working, that is what this date is for. The contract tests in `scripts/providers/` still run
+on every commit with no network and no key — they catch a malformed request, not a rejected
+one.
 
 **The `openai` adapter is the interesting one**, because `/v1/chat/completions` is what
 everything speaks. That one adapter covers OpenAI, Azure, Groq, DeepSeek, Mistral,
