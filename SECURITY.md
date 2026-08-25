@@ -12,17 +12,21 @@ Include: what you found, how to reproduce it, and the impact you believe it has.
 
 ## How this project handles your data
 
-Worth stating plainly, because this tool touches an API key and your site's content:
+Worth stating plainly, because this tool touches an API key and your site's content. The full
+detail, including how to verify each claim against the source, is in [PRIVACY.md](PRIVACY.md).
 
-- **The repository contains no API key.** You supply your own via `GEMINI_API_KEY` in the
-  environment or a `.env` file, which is gitignored.
-- **Your key is used only to call Google's Generative Language API directly from your
-  machine.** It is not sent anywhere else, logged, or embedded in output.
-- **There is no telemetry.** Nothing phones home. The only outbound network calls are to
-  `generativelanguage.googleapis.com`, made by `translate.mjs`.
-- **Your site content is sent to Google** for translation, which is inherent to the task.
-  If your pages contain anything confidential, review Google's API terms and data-handling
-  policy before running it.
+- **The repository contains no API key.** You supply your own through the environment or a
+  `.env` file, which is gitignored.
+- **Your key is used only to call the provider it belongs to, directly from your machine.**
+  Which provider that is depends on your `i18n.config.json`: Anthropic by default, or Gemini,
+  or any OpenAI-compatible endpoint. The key is never sent anywhere else, logged, or embedded
+  in output.
+- **There is no telemetry.** Nothing phones home to ConveyThis. There is exactly one outbound
+  call in the codebase, in `translate.mjs`, and it goes to the provider you configured.
+- **Your site content is sent to that provider** for translation, which is inherent to the task.
+  If your pages contain anything confidential, either review that provider's data-handling terms
+  first, or point the `openai` adapter at a local model (`"apiBaseUrl": "http://localhost:11434/v1"`),
+  in which case nothing leaves the machine.
 - **The translation memory (`i18n/tm/`) contains your source and translated copy.** It is
   intended to be committed. Check that this is appropriate for your repository's visibility.
 
