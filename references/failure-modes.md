@@ -96,6 +96,67 @@ Not an API error — a **quality** failure that every structural gate passes. Se
 
 ---
 
+### `output_config.effort` is rejected on Haiku
+
+**Symptom.** Every Anthropic request fails with a 400 naming `effort`, on a model that
+otherwise works.
+
+**Cause.** Claude tiers do not take the same parameters. `claude-haiku-4-5` rejects
+`output_config.effort` outright; the Opus and Sonnet tiers accept it.
+
+**Fix.** `providers/anthropic.mjs` keeps a capability table and sends the parameter only
+where it is accepted. Adding a model means adding it to `ACCEPTS_EFFORT`, not assuming.
+
+### Adaptive thinking is on by default, and translation pays for it
+
+**Symptom.** A run on Opus or Sonnet costs several times the estimate, with output token
+counts far above what the translated text can account for.
+
+**Cause.** Those models run adaptive thinking unless told otherwise. Segment translation
+has no use for it, but it is billed all the same.
+
+**Fix.** The adapter pins `output_config.effort: 'low'` on the tiers that support it.
+Do **not** "fix" this by setting `thinking: {type: 'disabled'}` — on Opus 5 that has its
+own failure modes, including writing a tool call into visible text.
+
+### Local models wrap JSON in a code fence
+
+**Symptom.** Works on a hosted provider, fails on Ollama or LM Studio with
+`Unexpected token \`` on every batch.
+
+**Cause.** Smaller models emit ` ```json … ``` ` regardless of instructions, and some
+prepend a sentence of preamble.
+
+**Fix.** `extractJson()` in `providers/index.mjs` strips fences and falls back to the
+outermost bracket pair. Never assume the response body starts with `[`.
+
+### A server rejects `response_format` and the run dies
+
+**Symptom.** An OpenAI-compatible endpoint returns 400 mentioning `response_format` or
+`json_schema`, and nothing translates.
+
+**Cause.** The structured-output field is not universal across "OpenAI-compatible"
+servers. Many implement `json_object` only; some implement neither.
+
+**Fix.** `unsupportedJsonMode()` distinguishes that rejection from a genuine bad request,
+and `translate.mjs` drops one rung — `json_schema` → `json_object` → prompt only — rather
+than failing. Placeholder validation still guards the output, so the weaker mode costs
+retries and not correctness. A real error (bad key, unknown model) must **not** match this
+path, which is why the pattern is narrow.
+
+### A model id sent to the wrong provider
+
+**Symptom.** After upgrading to 1.2, an existing project fails with an unhelpful
+"unknown model" from an API it never used before.
+
+**Cause.** 1.2 changed the default provider to Anthropic. A config from 1.0/1.1 pins a
+Gemini model id and has no `provider` key.
+
+**Fix.** `inferProvider()` derives the provider from the model id when `provider` is
+absent, so those configs keep working. Only a config with neither key gets the default.
+The run prints which provider it resolved and whether it was inferred — read that line
+before debugging anything else.
+
 ## Building locale pages
 
 ### Attribute order is not guaranteed

@@ -29,7 +29,7 @@ import {
   BUILD_DIR as DIST, SEG_DIR, BASE_URL as BASE, LOCALES as LANG_ROWS,
   BY_PATH, RTL, getPages, I18N_DIR, DNT,
 } from './config.mjs';
-import { creditBlock, markerBytes } from './credit.mjs';
+import { creditBlock, markerBytes, GENERATOR_NAME, PRIOR_GENERATOR_NAMES } from './credit.mjs';
 
 const ROOT = process.cwd();
 
@@ -93,10 +93,13 @@ function attrOf(html, tagRe, test, attrName) {
 function tagSequence(html) {
   const seq = [];
   const attr = (n, name) => (n.attrs ?? []).find((a) => a.name === name)?.value;
+  // Both the current product name and the ones earlier releases wrote: upgrading must
+  // not invalidate a locale directory that is still on disk from a previous build.
+  const OURS = [GENERATOR_NAME, ...PRIOR_GENERATOR_NAMES];
   const isOurCreditMeta = (n) =>
     n.tagName === 'meta' &&
     attr(n, 'name') === 'generator' &&
-    (attr(n, 'content') ?? '').startsWith('ConveyThis static-site-localization');
+    OURS.some((name) => (attr(n, 'content') ?? '').startsWith(name));
   // Exactly one is skipped. build-locales.mjs inserts exactly one, so a second copy means
   // something ran twice over its own output — which is a real defect and must still fail.
   let skipped = 0;

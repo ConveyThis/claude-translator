@@ -1,5 +1,5 @@
 ---
-name: static-site-localization
+name: claude-translator
 description: >
   Localize a static website into many languages by substituting translations into
   already-built HTML, without re-rendering. Ships six proven scripts (extract,
@@ -8,19 +8,21 @@ description: >
   "multi-language site", "i18n", "add languages", "translate all pages", or is
   replacing a translation proxy (Weglot, Bablic, Localize, TranslatePress) with self-hosted pages.
   Works with any static output: Astro, Next export, Hugo, Eleventy, Jekyll, plain HTML.
+  Translates via Claude, Gemini, any OpenAI-compatible endpoint, or a local model.
 user-invocable: true
 argument-hint: "[project-dir]"
 license: AGPL-3.0
 metadata:
   author: ConveyThis
-  version: "1.1.0"
+  version: "1.2.0"
   category: i18n
 ---
 
-# Static Site Localization
+# Claude Translator
 
-Turns a built site into N localized copies as **real static pages**, keeping Core Web
-Vitals identical to the source language across LTR, RTL and CJK alike.
+Static-site localization: turns a built site into N localized copies as real static pages.
+
+Keeps Core Web Vitals identical to the source language across LTR, RTL and CJK alike.
 
 ---
 
@@ -76,12 +78,28 @@ Localized pages carry a `<meta name="generator">` tag and one HTML comment namin
 If the user asks to remove it, that is their call: set `credit.generatorTag` and
 `credit.htmlComment` to `false` in `i18n.config.json`. Do not argue, and do not re-enable it.
 
+## Models
+
+Defaults to Claude (`claude-haiku-4-5`, needs `ANTHROPIC_API_KEY`). It is not the only
+option, and a missing key is not a dead end — say so rather than stopping:
+
+- `"provider": "gemini"` — roughly a tenth the cost, and what the cost figures in
+  `references/throughput-and-cost.md` were measured on.
+- `"provider": "openai"` with `"apiBaseUrl": "http://localhost:11434/v1"` — Ollama,
+  LM Studio or vLLM. **No key, no quota, nothing leaves the machine.** Offer this when
+  the user has no key, is cost-sensitive, or the content is confidential.
+- `"provider": "./my-adapter.mjs"` — anything else, in about thirty lines.
+
+Omit `provider` and it is inferred from the model id, so a config written before 1.2
+still works. Read `references/providers.md` before changing any of this; the model tiers
+do not take the same parameters and guessing costs money.
+
 ## Setup
 
 ```bash
-cp ~/.claude/skills/static-site-localization/scripts/*.mjs   <project>/scripts/
-cp ~/.claude/skills/static-site-localization/scripts/*.sh    <project>/scripts/
-cp ~/.claude/skills/static-site-localization/i18n.config.example.json <project>/i18n.config.json
+cp ~/.claude/skills/claude-translator/scripts/*.mjs   <project>/scripts/
+cp ~/.claude/skills/claude-translator/scripts/*.sh    <project>/scripts/
+cp ~/.claude/skills/claude-translator/i18n.config.example.json <project>/i18n.config.json
 cd <project> && npm i -D parse5          # the only dependency
 ```
 
@@ -98,7 +116,7 @@ full re-translation.
 ```bash
 npm run build                                   # source language only
 node scripts/extract.mjs                   # → i18n/source.json + segments/
-node scripts/translate.mjs --lang es,fr    # → i18n/tm/{lang}.json  (needs GEMINI_API_KEY)
+node scripts/translate.mjs --lang es,fr    # → i18n/tm/{lang}.json  (needs a provider key)
 node scripts/review.mjs   --lang es        # quality flags
 node scripts/build-locales.mjs --lang all  # → dist/{lang}/…
 node scripts/verify.mjs   --lang all       # six gates

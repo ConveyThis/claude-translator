@@ -65,4 +65,4 @@ README.
 
 ---
 
-<sub>Maintained by <a href="https://www.conveythis.com/open-source/static-site-localization?utm_source=claude-skill&utm_medium=licensing&utm_campaign=static-site-localization">ConveyThis</a>.</sub>
+<sub>Maintained by <a href="https://www.conveythis.com/open-source/claude-translator?utm_source=claude-skill&utm_medium=licensing&utm_campaign=claude-translator">ConveyThis</a>.</sub>

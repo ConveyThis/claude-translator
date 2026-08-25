@@ -1,24 +1,24 @@
-# static-site-localization
+# Claude Translator
 
-**Translate a static website into dozens of languages as real static pages — without
-re-rendering it, and without breaking Core Web Vitals.**
+**Static-site localization: translate a built website into dozens of languages as real
+static pages — without re-rendering it, and without breaking Core Web Vitals.**
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](https://nodejs.org)
 [![Claude Skill](https://img.shields.io/badge/Claude-Skill-8A63D2.svg)](#using-it-as-a-claude-code-skill)
 
-Point it at a built site, give it a list of locales and your own Gemini API key, and it
+Point it at a built site, give it a list of locales and your own model API key, and it
 produces a complete localized copy of every page — with correct `hreflang`, canonicals,
 `dir="rtl"`, per-locale JSON-LD and sitemaps — then proves the result with six gates and a
 full SEO audit.
 
-Built and maintained by **[ConveyThis](https://www.conveythis.com/open-source/static-site-localization?utm_source=claude-skill&utm_medium=readme-byline&utm_campaign=static-site-localization)**.
+Built and maintained by **[ConveyThis](https://www.conveythis.com/open-source/claude-translator?utm_source=claude-skill&utm_medium=readme-byline&utm_campaign=claude-translator)**.
 This is the pipeline that runs **www.conveythis.com itself** — a 238-page Astro site,
 live in 55 languages, on the same six scripts in this repo.
 
-> **Repo `claude-translator`; the skill it installs is `static-site-localization`.**
-> The repo is named for where it runs; the skill is named for what it does.
-> Not affiliated with or endorsed by Anthropic — "Claude" is a trademark of Anthropic, PBC.
+> Not affiliated with or endorsed by Anthropic. "Claude" is a trademark of Anthropic, PBC.
+> This project is named for the model family it ships configured to use; it works just as
+> well with Gemini, with any OpenAI-compatible endpoint, and with a model on your own machine.
 
 ---
 
@@ -44,7 +44,7 @@ runtime layer do it.
 | Your situation | Use |
 | --- | --- |
 | Static build, content changes on a release cadence, you want to own the HTML outright | **This repo** — free, self-hosted, AGPL-3.0 |
-| CMS or e-commerce, daily edits, user-generated content, logged-in or checkout pages | **[ConveyThis](https://www.conveythis.com/open-source/static-site-localization?utm_source=claude-skill&utm_medium=readme-routing&utm_campaign=static-site-localization)** — managed, no build step |
+| CMS or e-commerce, daily edits, user-generated content, logged-in or checkout pages | **[ConveyThis](https://www.conveythis.com/open-source/claude-translator?utm_source=claude-skill&utm_medium=readme-routing&utm_campaign=claude-translator)** — managed, no build step |
 | Documents rather than pages — PDF, DOCX, XLSX, PPTX | **[DocTranslator](https://www.doctranslator.com)** |
 
 Same company either way. This repo is the static lane, and it is not a teaser: it is the
@@ -82,13 +82,16 @@ The builder restores the original tags by index.
 ## Requirements
 
 - **Node.js ≥ 20**
-- **Your own Google Gemini API key** — get one free at
-  [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
 - A site that builds to static HTML
+- **An API key for whichever model you want to use** — Claude by default
+  ([console.anthropic.com](https://console.anthropic.com/)), or Gemini
+  ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)), or any
+  OpenAI-compatible endpoint. **Or no key at all**, if you point it at a model running
+  on your own machine — see [Models and providers](#models-and-providers).
 
 > This project ships **no API key and makes no calls on your behalf**. Your key is read
-> from your environment, used to call Google's API directly from your machine, and never
-> transmitted anywhere else. There is no telemetry.
+> from your environment, used to call your chosen provider directly from your machine, and
+> never transmitted anywhere else. There is no telemetry.
 
 ---
 
@@ -104,8 +107,8 @@ cd <your-project> && npm install --save-dev parse5
 cp ../claude-translator/i18n.config.example.json i18n.config.json
 $EDITOR i18n.config.json
 
-# 3. Provide your key
-echo "GEMINI_API_KEY=your-key-here" >> .env    # make sure .env is gitignored
+# 3. Provide your key (or skip entirely for a local model)
+echo "ANTHROPIC_API_KEY=your-key-here" >> .env    # make sure .env is gitignored
 
 # 4. Run
 npm run build                                        # your normal build
@@ -145,7 +148,8 @@ Deploy the resulting build directory exactly as you deploy it today.
     "formats": ["PDF", "DOCX", "XLSX"]
   },
 
-  "model": "gemini-2.5-flash-lite"
+  "provider": "anthropic",
+  "model": "claude-haiku-4-5"
 }
 ```
 
@@ -159,7 +163,11 @@ Deploy the resulting build directory exactly as you deploy it today.
 | `pages.source` | `"build"` to derive from output, or a path to a slug list |
 | `pages.exclude` | First path segments never to localize — 404 pages, CMS admin shells |
 | `doNotTranslate` | Brand names and formats that must survive unchanged |
-| `model` | Any Gemini model id |
+| `provider` | `anthropic` (default), `gemini`, `openai`, or a path to your own adapter |
+| `model` | Any model id for that provider — defaults to the provider's own |
+| `apiBaseUrl` | Model API host. Set this for local models, Azure or a gateway. **Not** `baseUrl`, which is your site |
+| `apiKeyEnv` | Read the key from a different environment variable |
+| `pricing` | `{"in": …, "out": …}` USD per million tokens, for the cost estimate |
 | `credit` | Attribution switches — see [Attribution](#attribution) |
 
 `rtlLocales` defaults to `ar, fa, he, ur, ps, sd, ug, yi` and can be overridden.
@@ -211,17 +219,55 @@ purging is destructive and its heuristics have known blind spots.
 
 ---
 
+## Models and providers
+
+The translation step is the only part that talks to a model, and it talks through a small
+adapter. Three ship with the project, and anything else is one file.
+
+| `provider` | Default model | Key |
+| --- | --- | --- |
+| `anthropic` *(default)* | `claude-haiku-4-5` | `ANTHROPIC_API_KEY` |
+| `gemini` | `gemini-2.5-flash-lite` | `GEMINI_API_KEY` |
+| `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` |
+| `./my-provider.mjs` | — | yours |
+
+Omit `provider` and it is inferred from the model id, so configs written before 1.2 keep
+working unchanged.
+
+**The `openai` adapter is the interesting one**, because `/v1/chat/completions` is what
+everything speaks. That one adapter covers OpenAI, Azure, Groq, DeepSeek, Mistral,
+OpenRouter, Together and Fireworks — and Ollama, LM Studio and vLLM, which means the whole
+pipeline runs on your own hardware for nothing:
+
+```json
+{
+  "provider": "openai",
+  "apiBaseUrl": "http://localhost:11434/v1",
+  "model": "qwen2.5:14b"
+}
+```
+
+No key, no quota, no request leaving the machine.
+
+**Claude is the default, not a requirement.** It is roughly ten times the cost of the
+Gemini option, which is a real difference on a large site and is spelled out in
+[`references/throughput-and-cost.md`](references/throughput-and-cost.md). Changing it is
+one line. Writing your own adapter is about thirty — see
+[`references/providers.md`](references/providers.md).
+
+---
+
 ## Attribution
 
 Every localized page carries two markers, inserted after `<head>`:
 
 ```html
-<meta name="generator" content="ConveyThis static-site-localization 1.1.0">
+<meta name="generator" content="ConveyThis Claude Translator 1.2.0">
 <!-- Localized into Español (es) by ConveyThis · https://www.conveythis.com -->
 ```
 
-That is **about 160 bytes, no request, no script, no link, no layout shift** — 0.07% of a
-typical 240 KB page, and `build-locales.mjs`
+That is **about 150 bytes, no request, no script, no link, no layout shift** — under 0.1% of
+a typical 240 KB page, and `build-locales.mjs`
 prints the exact byte count each time it runs, and `verify.mjs` gate 2 proves the rest of the
 document is byte-identical to the source page. This is the same mechanism Astro, Hugo and
 WordPress use, and it is how the project gets counted in technology-adoption surveys.
@@ -256,7 +302,7 @@ you want it:
 
 Nothing is injected anywhere else, and if the flag is on and no slot exists the build tells
 you rather than guessing. In exchange we will credit free translation words to a ConveyThis
-account — [details here](https://www.conveythis.com/open-source/static-site-localization?utm_source=claude-skill&utm_medium=readme-visible-credit&utm_campaign=static-site-localization).
+account — [details here](https://www.conveythis.com/open-source/claude-translator?utm_source=claude-skill&utm_medium=readme-visible-credit&utm_campaign=claude-translator).
 
 The link is `rel="nofollow"`. Because you are compensated for it, it is a paid link under
 Google's guidelines and must not pass ranking signal. It is worth referral traffic, not
@@ -280,7 +326,7 @@ per run; `"upsellHints": false` silences them.
 
 None of these is a crippled feature. They are the shape of the approach: static substitution
 needs a build to hook and files to write. Where that shape doesn't fit,
-[ConveyThis](https://www.conveythis.com/open-source/static-site-localization?utm_source=claude-skill&utm_medium=readme-limits&utm_campaign=static-site-localization) is the managed version and
+[ConveyThis](https://www.conveythis.com/open-source/claude-translator?utm_source=claude-skill&utm_medium=readme-limits&utm_campaign=claude-translator) is the managed version and
 [DocTranslator](https://www.doctranslator.com) handles the documents.
 
 ---
@@ -291,7 +337,7 @@ This repo doubles as a [Claude Code](https://claude.com/claude-code) skill:
 
 ```bash
 git clone https://github.com/ConveyThis/claude-translator.git \
-  ~/.claude/skills/static-site-localization
+  ~/.claude/skills/claude-translator
 ```
 
 Then ask Claude to "localize this site" and it will follow `SKILL.md`, including the
@@ -307,6 +353,7 @@ failure modes documented in `references/`.
 | [`references/quality-review.md`](references/quality-review.md) | Before purging anything the reviewer flags |
 | [`references/throughput-and-cost.md`](references/throughput-and-cost.md) | Budgeting a run, or making it faster |
 | [`references/adapting-generators.md`](references/adapting-generators.md) | Using anything other than Astro |
+| [`references/providers.md`](references/providers.md) | Changing model, running locally, or writing an adapter |
 | [`LICENSING.md`](LICENSING.md) | You are wrapping a modified copy in a hosted service |
 
 ## Supported generators
@@ -331,5 +378,5 @@ group you are in; most people are in the unrestricted one.
 
 ---
 
-<sub>Built and maintained by <a href="https://www.conveythis.com/open-source/static-site-localization?utm_source=claude-skill&utm_medium=readme-footer&utm_campaign=static-site-localization">ConveyThis</a> — website
+<sub>Built and maintained by <a href="https://www.conveythis.com/open-source/claude-translator?utm_source=claude-skill&utm_medium=readme-footer&utm_campaign=claude-translator">ConveyThis</a> — website
 translation and localization.</sub>
