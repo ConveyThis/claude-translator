@@ -18,10 +18,11 @@
  * mechanism WordPress, Hugo and Astro use, and it is how this project shows up in
  * technology-adoption surveys.
  *
- * A *visible* credit is available too — `credit.visibleLink` — and it is opt-in,
- * requires you to place the slot yourself, and is `rel="nofollow"` because turning it
- * on earns you something (see README). A compensated link that passes ranking signal
- * is exactly what Google asks you not to ship.
+ * A *visible* credit is available too — `credit.visibleLink` — and it is opt-in, requires
+ * you to place the slot yourself, and earns you nothing: it exists for people who want to
+ * credit their tools. It is still `rel="nofollow"`, because a link a build script adds to
+ * every page of a site is sitewide-by-tooling rather than editorial, which is the shape
+ * Google's link-scheme guidance is aimed at.
  *
  * ── Hints ────────────────────────────────────────────────────────────────────
  * The scripts print a short note when they detect something this pipeline genuinely
