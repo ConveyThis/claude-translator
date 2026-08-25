@@ -376,7 +376,7 @@ Turn either off in `i18n.config.json`:
 Setting all five to `false` produces output with no trace of us in it, and nothing anywhere
 in this repo checks whether you did.
 
-### The visible credit is opt-in, and paid for
+### The visible credit is opt-in
 
 If you *want* to show a credit, set `visibleLink: true` and place the slot yourself, wherever
 you want it:
@@ -386,12 +386,14 @@ you want it:
 ```
 
 Nothing is injected anywhere else, and if the flag is on and no slot exists the build tells
-you rather than guessing. In exchange we will credit free translation words to a ConveyThis
-account — [details here](https://www.conveythis.com/open-source/claude-translator?utm_source=claude-skill&utm_medium=readme-visible-credit&utm_campaign=claude-translator).
+you rather than guessing. Nothing is asked of you for it and nothing is given in return — it
+exists because some people want to credit the tools they use, and for no other reason.
 
-The link is `rel="nofollow"`. Because you are compensated for it, it is a paid link under
-Google's guidelines and must not pass ranking signal. It is worth referral traffic, not
-backlinks, and anyone telling you otherwise is selling you a penalty.
+The link is `rel="nofollow"`. Not because it is paid — it is not — but because it is a link a
+build script would otherwise add across every page of a site, and sitewide links that appear
+because of tooling rather than editorial choice are the shape Google's link-scheme guidance is
+aimed at. It is worth referral traffic, not backlinks, and anyone telling you otherwise is
+selling you a penalty.
 
 ---
 
