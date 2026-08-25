@@ -418,17 +418,30 @@ needs a build to hook and files to write. Where that shape doesn't fit,
 
 ---
 
-## Using it as a Claude Code skill
+## Using it as a Claude Code plugin
 
-This repo doubles as a [Claude Code](https://claude.com/claude-code) skill:
+This repo is also a self-contained [Claude Code](https://claude.com/claude-code) plugin, named
+`conveythis-translator`. Once it is approved for the community directory:
 
 ```bash
-git clone https://github.com/ConveyThis/claude-translator.git \
-  ~/.claude/skills/claude-translator
+/plugin marketplace add anthropics/claude-plugins-community
+/plugin install conveythis-translator@claude-community
 ```
 
-Then ask Claude to "localize this site". It follows `SKILL.md`, including the failure modes in
-`references/` and the routing rules for when this is the wrong tool entirely.
+Plugin skills are namespaced, so it is invoked as `/conveythis-translator:translate-site` — or
+just ask Claude to "localize this site" and it will pick the skill up on its own. It follows
+`skills/translate-site/SKILL.md`, including the failure modes in `references/` and the routing
+rules for when this is the wrong tool entirely.
+
+To run it before it is listed, clone the repo anywhere and point Claude Code at it:
+
+```bash
+git clone https://github.com/ConveyThis/claude-translator.git
+claude --plugin-dir ./claude-translator
+```
+
+Cloning into `~/.claude/skills/claude-translator/` also works: Claude Code loads a directory
+there that carries a `.claude-plugin/plugin.json` as a plugin automatically, with no install step.
 
 ---
 

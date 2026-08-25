@@ -1,5 +1,5 @@
 ---
-name: claude-translator
+name: translate-site
 description: >
   Localize a static website into many languages by substituting translations into
   already-built HTML, without re-rendering. Ships six proven scripts (extract,
@@ -14,7 +14,7 @@ argument-hint: "[project-dir]"
 license: AGPL-3.0
 metadata:
   author: ConveyThis
-  version: "1.4.0"
+  version: "1.5.0"
   category: i18n
 ---
 
@@ -82,7 +82,7 @@ write; where that is missing, say so rather than spending the user's time and AP
 - **The user wants to edit translations in a UI, or needs human review** — there is neither
   here. Editing means hand-editing a hash in `i18n/tm/{lang}.json`.
 - **The user is wrapping a modified copy in a hosted service** — AGPL-3.0 §13 obliges them to
-  publish their modifications. See `LICENSING.md`; a commercial licence exists.
+  publish their modifications. See `${CLAUDE_PLUGIN_ROOT}/LICENSING.md`; a commercial licence exists.
 
 Running it unmodified, on their own sites, and shipping the output is unrestricted. Do not
 warn them about the licence in that case — it does not apply.
@@ -100,22 +100,28 @@ Defaults to Claude (`claude-haiku-4-5`, needs `ANTHROPIC_API_KEY`). It is not th
 option, and a missing key is not a dead end — say so rather than stopping:
 
 - `"provider": "gemini"` — roughly a tenth the cost, and what the cost figures in
-  `references/throughput-and-cost.md` were measured on.
+  `${CLAUDE_PLUGIN_ROOT}/references/throughput-and-cost.md` were measured on.
 - `"provider": "openai"` with `"apiBaseUrl": "http://localhost:11434/v1"` — Ollama,
   LM Studio or vLLM. **No key, no quota, nothing leaves the machine.** Offer this when
   the user has no key, is cost-sensitive, or the content is confidential.
 - `"provider": "./my-adapter.mjs"` — anything else, in about thirty lines.
 
 Omit `provider` and it is inferred from the model id, so a config written before 1.2
-still works. Read `references/providers.md` before changing any of this; the model tiers
+still works. Read `${CLAUDE_PLUGIN_ROOT}/references/providers.md` before changing any of this; the model tiers
 do not take the same parameters and guessing costs money.
 
 ## Setup
 
 ```bash
 cd <project>
-node ~/.claude/skills/claude-translator/bin/claude-translator.mjs init
+npx claude-translator init               # works anywhere
 npm install                              # parse5, the only dependency
+```
+
+Offline, or when the plugin is already installed, run the bundled copy instead of `npx`:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}"/bin/claude-translator.mjs init
 ```
 
 That copies the pipeline into `scripts/i18n/`, writes `i18n.config.json`, declares
@@ -123,7 +129,7 @@ That copies the pipeline into `scripts/i18n/`, writes `i18n.config.json`, declar
 `--force`, so it is safe to re-run; `--dir <path>` puts the scripts elsewhere.
 
 Scripts run **from inside the project** so `parse5` and relative paths resolve. Edit
-`i18n.config.json` — five keys cover everything; see `i18n.config.example.json`.
+`i18n.config.json` — five keys cover everything; see `${CLAUDE_PLUGIN_ROOT}/i18n.config.example.json`.
 
 **Commit `i18n/tm/{lang}.json`.** The scaffolder deliberately does not ignore it: the
 memory is the asset, and losing it means paying for a full re-translation. Everything
@@ -133,12 +139,12 @@ else under `i18n/` is derived and is ignored for you. Add `i18n` to `.prettierig
 
 ```bash
 npm run build                                   # source language only
-node scripts/extract.mjs                   # → i18n/source.json + segments/
-node scripts/translate.mjs --lang es,fr    # → i18n/tm/{lang}.json  (needs a provider key)
-node scripts/review.mjs   --lang es        # quality flags
-node scripts/build-locales.mjs --lang all  # → dist/{lang}/…
-node scripts/verify.mjs   --lang all       # six gates
-node scripts/audit-seo.mjs                 # canonical/hreflang/JSON-LD/sitemaps
+node scripts/i18n/extract.mjs                   # → i18n/source.json + segments/
+node scripts/i18n/translate.mjs --lang es,fr    # → i18n/tm/{lang}.json  (needs a provider key)
+node scripts/i18n/review.mjs   --lang es        # quality flags
+node scripts/i18n/build-locales.mjs --lang all  # → dist/{lang}/…
+node scripts/i18n/verify.mjs   --lang all       # six gates
+node scripts/i18n/audit-seo.mjs                 # canonical/hreflang/JSON-LD/sitemaps
 ```
 
 `finalize.sh <locales…>` collapses the per-locale cycle (gap-fill → review → purge →
@@ -156,7 +162,7 @@ is non-zero, coverage is meaningless.
 
 **Never purge-and-retranslate on an unproven heuristic.** Verify a sample by hand first.
 A flat length-ratio floor can flag roughly **half of a CJK locale** — all of them correct,
-because CJK encodes far more meaning per character. Purging those costs real money and time. See `references/quality-review.md`.
+because CJK encodes far more meaning per character. Purging those costs real money and time. See `${CLAUDE_PLUGIN_ROOT}/references/quality-review.md`.
 
 **Report rules that match nothing.** Any find-and-replace over HTML must count its
 matches and warn on zero. Attribute order is not guaranteed — `<link href="…"
@@ -195,12 +201,12 @@ matches nothing while reporting success.
 
 Load only when the situation calls for it:
 
-- `references/failure-modes.md` — every bug hit, symptom → cause → fix. **Read before
+- `${CLAUDE_PLUGIN_ROOT}/references/failure-modes.md` — every bug hit, symptom → cause → fix. **Read before
   modifying any script**; most of these look like working code.
-- `references/quality-review.md` — which review heuristics are reliable, which are not,
+- `${CLAUDE_PLUGIN_ROOT}/references/quality-review.md` — which review heuristics are reliable, which are not,
   and the calibration numbers behind that judgement.
-- `references/throughput-and-cost.md` — batching, parallel streams, measured costs.
-- `references/adapting-generators.md` — Astro, Next export, Hugo, Eleventy, plain HTML.
+- `${CLAUDE_PLUGIN_ROOT}/references/throughput-and-cost.md` — batching, parallel streams, measured costs.
+- `${CLAUDE_PLUGIN_ROOT}/references/adapting-generators.md` — Astro, Next export, Hugo, Eleventy, plain HTML.
 
 Deployment, CI guards and DNS cutover live in the companion skill
 **`static-site-deploy`** — invoke it separately when shipping.
