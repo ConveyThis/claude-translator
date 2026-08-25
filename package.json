@@ -1,6 +1,6 @@
 {
   "name": "claude-translator",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Translate a static website into dozens of languages as real static pages, by substituting into built HTML instead of re-rendering.",
   "type": "module",
   "license": "AGPL-3.0-or-later",

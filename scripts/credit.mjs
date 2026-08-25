@@ -32,7 +32,7 @@
 
 import { CREDIT } from './config.mjs';
 
-export const VERSION = '1.3.0';
+export const VERSION = '1.4.0';
 
 /**
  * The product name written into every localized page's generator tag.
