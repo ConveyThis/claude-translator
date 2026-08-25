@@ -18,7 +18,7 @@ talks through a small adapter. Three ship with the project; anything else is one
 | --- | --- | --- | --- |
 | `anthropic` | `claude-haiku-4-5` | `ANTHROPIC_API_KEY` | The default. |
 | `gemini` | `gemini-2.5-flash-lite` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | Roughly a tenth the cost — see [throughput-and-cost.md](throughput-and-cost.md). |
-| `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` | Any OpenAI-compatible endpoint, including local ones. |
+| `openai` | `gpt-5.6-luna` | `OPENAI_API_KEY` | Any OpenAI-compatible endpoint, including local ones. |
 | `./my-provider.mjs` | — | yours | A path is imported directly. See below. |
 
 `--provider` and `--model` on the command line override the config for one run.
@@ -98,7 +98,7 @@ export const envKeys = ['MY_PROVIDER_KEY'];  // checked in order, env then .env
 export const keyOptional = false;            // true for local servers
 
 /** Build one HTTP request. */
-export function request({ model, system, items, temperature, key, baseUrl, jsonMode }) {
+export function request({ model, system, items, temperature, key, baseUrl, jsonMode, drop }) {
   return {
     url: `${baseUrl ?? 'https://api.example.com/v1'}/translate`,
     headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
@@ -121,6 +121,20 @@ export const unwrap = (parsed) => parsed.translations ?? parsed;
 
 /** Optional: USD per million tokens, [in, out]. Omit if unknown. */
 export function pricing(model) { return [0.5, 1.5]; }
+
+/**
+ * Optional: name ONE request parameter the server rejected, so translate.mjs can retry
+ * without it. Return null for anything else. The parameter is added to a `drop` set
+ * that is passed back into request(), and each one is dropped at most once.
+ *
+ * Set the bar high. The error must read as a capability complaint AND name a parameter
+ * you actually send; otherwise a genuine 400 gets mistaken for a recoverable one and the
+ * run quietly strips its own request instead of telling the user what is wrong.
+ */
+export function unsupportedParam(status, errText) {
+  if (status !== 400) return null;
+  return /unsupported.*\btemperature\b/i.test(errText) ? 'temperature' : null;
+}
 ```
 
 Then:

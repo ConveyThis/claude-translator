@@ -14,7 +14,7 @@ argument-hint: "[project-dir]"
 license: AGPL-3.0
 metadata:
   author: ConveyThis
-  version: "1.3.0"
+  version: "1.4.0"
   category: i18n
 ---
 

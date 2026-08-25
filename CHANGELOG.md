@@ -5,7 +5,71 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.4.0] — 2026-08-25
+
+### Changed
+
+- **The `openai` adapter's default model is now `gpt-5.6-luna`**, replacing `gpt-4o-mini`.
+  OpenAI has not published a shutdown date for `gpt-4o-mini`, but the rest of that generation
+  has one — `gpt-4o-2024-05-13`, `o1`, `o3-mini` and `gpt-4.1-nano` all retire 2026-10-23 — and
+  a 2024 model is no longer a sensible default for new projects. Anyone pinning `gpt-4o-mini` in
+  `i18n.config.json` is unaffected
+
+- **Reasoning models no longer receive `temperature`.** This was a required change, not a
+  cosmetic one: `gpt-5.6-luna` rejects any temperature but `1`, so the model swap alone would
+  have returned `400 Unsupported value: 'temperature' does not support 0.2 with this model` on
+  every single request. Model ids matching `^gpt-5` or `^o[1-9]` now get no sampling parameter
+  and `reasoning_effort: 'none'` instead — bulk segment translation is a low-reasoning task, the
+  same argument `anthropic.mjs` makes when it pins its thinking tiers to `effort: 'low'`.
+  The match is anchored, so a local model whose id merely contains `gpt-5` keeps `temperature`
+
+### Added
+
+- **Automatic recovery from an unsupported request parameter.** A new optional adapter hook,
+  `unsupportedParam(status, errText)`, names one parameter the server rejected; `translate.mjs`
+  drops it and retries, exactly as it already steps down the `response_format` ladder. Each
+  parameter is dropped at most once, so it cannot loop. This is the general form of the bug
+  above — the next reasoning model with a new restriction now degrades instead of failing a run
+
+  The hook is deliberately hard to trigger: the error must read as a capability complaint *and*
+  name a parameter the adapter actually sends. A plain `400 model not found` is still a failure,
+  because an adapter that quietly strips its own request is worse than one that stops
+
+- Seven contract tests covering the reasoning-model rule, the `gpt-4o-mini` regression, local
+  model ids, the `drop` set, and `unsupportedParam` — including that it and `unsupportedJsonMode`
+  never both claim the same error. 39 tests total
+
+### Verified
+
+- `gpt-5.6-luna` translated the same 98-unit site into Russian live: 3,450 / 2,876 tokens,
+  **0 failed units**, six of six gates, 0 SEO findings, and no fallback needed — the proactive
+  rule was correct up front. Its output shares only 21% of units with the `gpt-4o-mini` run,
+  confirming the new default actually took effect. `unsupportedParam` was separately checked
+  against a real 400 from the live API rather than a paraphrase of one. The Anthropic and Gemini
+  adapters were re-run unchanged to confirm the `translate.mjs` change disturbed neither
+
+## [1.3.0] — 2026-08-25
+
+### Added
+
+- **`npx claude-translator init`** — a scaffolder that replaces the four manual install
+  steps. Copies the pipeline into `scripts/i18n/` (or `--dir`), writes `i18n.config.json`,
+  declares `parse5`, and appends the derived `i18n/` paths to `.gitignore`. It never
+  overwrites without `--force` and prints every path it touched
+- `--help`, `--version`, `--dir`, `--force`
+- **12 CLI contract tests** (`npm test`) covering the refusal to install outside a Node
+  project, idempotency, `--force`, `--dir`, appending rather than replacing an existing
+  `.gitignore`, and that `package.json` "files" actually ships what `init` copies
+- CI now packs the tarball, installs it into a scratch project and runs `init`, so a
+  broken published package fails the build rather than a user's first command
+
+### Changed
+
+- `parse5` moved from `dependencies` to `devDependencies`. Nothing in the published
+  package needs it at runtime — the CLI only copies files — so `npx` no longer downloads
+  it. A clone plus `npm install` is unaffected
+- `package.json` gained a `files` allowlist, so the tarball carries the scripts,
+  references, `SKILL.md` and the example config, and nothing else
 
 ### Verified
 
@@ -32,29 +96,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   The README's provider table now carries a *last verified* date per adapter, so a retired model
   id shows up as staleness rather than as a first-time user's unexplained 404.
-
-## [1.3.0] — 2026-08-25
-
-### Added
-
-- **`npx claude-translator init`** — a scaffolder that replaces the four manual install
-  steps. Copies the pipeline into `scripts/i18n/` (or `--dir`), writes `i18n.config.json`,
-  declares `parse5`, and appends the derived `i18n/` paths to `.gitignore`. It never
-  overwrites without `--force` and prints every path it touched
-- `--help`, `--version`, `--dir`, `--force`
-- **12 CLI contract tests** (`npm test`) covering the refusal to install outside a Node
-  project, idempotency, `--force`, `--dir`, appending rather than replacing an existing
-  `.gitignore`, and that `package.json` "files" actually ships what `init` copies
-- CI now packs the tarball, installs it into a scratch project and runs `init`, so a
-  broken published package fails the build rather than a user's first command
-
-### Changed
-
-- `parse5` moved from `dependencies` to `devDependencies`. Nothing in the published
-  package needs it at runtime — the CLI only copies files — so `npx` no longer downloads
-  it. A clone plus `npm install` is unaffected
-- `package.json` gained a `files` allowlist, so the tarball carries the scripts,
-  references, `SKILL.md` and the example config, and nothing else
 
 ## [1.2.0] — 2026-08-25
 

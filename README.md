@@ -280,7 +280,7 @@ adapter. Three ship with the project, and anything else is one file.
 | --- | --- | --- | --- |
 | `anthropic` *(default)* | `claude-haiku-4-5` | `ANTHROPIC_API_KEY` | 2026-08-25 |
 | `gemini` | `gemini-2.5-flash-lite` | `GEMINI_API_KEY` | 2026-08-25 |
-| `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` | 2026-08-25 |
+| `openai` | `gpt-5.6-luna` | `OPENAI_API_KEY` | 2026-08-25 |
 | `./my-provider.mjs` | — | yours | — |
 
 Omit `provider` and it is inferred from the model id, so configs written before 1.2 keep
@@ -301,6 +301,23 @@ This column is a freshness marker, not a guarantee. Model ids get retired; if a 
 working, that is what this date is for. The contract tests in `scripts/providers/` still run
 on every commit with no network and no key — they catch a malformed request, not a rejected
 one.
+
+**Reasoning models and `temperature`.** The `openai` default is a reasoning model, and those
+reject sampling parameters — GPT-5.x answers a `temperature: 0.2` with
+`400 Unsupported value: 'temperature' … Only the default (1) value is supported`. The adapter
+handles this twice over: it omits `temperature` and sends `reasoning_effort: 'none'` for model
+ids it recognises as reasoning models, and if a server rejects a parameter anyway, the run drops
+that one parameter and retries instead of failing. A pinned `gpt-4o-mini`, and every local model,
+still get `temperature` exactly as before.
+
+`reasoning_effort` is `'none'` because bulk segment translation is a low-reasoning task — the
+same reason the Anthropic adapter pins its thinking tiers to `effort: 'low'`. Paying for a
+reasoning pass on every batch of forty segments is the one cost here worth engineering away.
+
+**Pricing.** `gpt-5.6-luna` is $0.20 in / $1.20 out per million tokens. The adapter reports no
+cost, deliberately — `pricing()` cannot see `baseUrl`, so it cannot tell OpenAI itself from
+OpenRouter or a local server offering the same model id. Set `pricing` in `i18n.config.json` to
+get a figure in the run summary.
 
 **The `openai` adapter is the interesting one**, because `/v1/chat/completions` is what
 everything speaks. That one adapter covers OpenAI, Azure, Groq, DeepSeek, Mistral,

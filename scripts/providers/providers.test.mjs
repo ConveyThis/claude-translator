@@ -131,6 +131,86 @@ test('openai: default host and bearer auth', () => {
   assert.equal(r.body.messages[1].content, JSON.stringify(ITEMS));
 });
 
+// ── Reasoning models reject sampling ─────────────────────────────────────────
+// GPT-5.x answers `temperature: 0.2` with a 400 and takes reasoning_effort instead.
+// Both halves are asserted: what the reasoning models get, and — just as important —
+// that nothing else changed for the models and local servers that were working.
+
+test('openai: a reasoning model gets no temperature and no reasoning budget', () => {
+  const r = openai.request({ ...ARGS, model: 'gpt-5.6-luna' });
+  assert.equal(r.body.temperature, undefined, 'GPT-5.x returns 400 on any temperature but 1');
+  assert.equal(r.body.reasoning_effort, 'none', 'bulk translation must not pay for reasoning');
+});
+
+test('openai: the o-series is treated the same way', () => {
+  for (const model of ['o1', 'o3-mini', 'o4-mini']) {
+    const r = openai.request({ ...ARGS, model });
+    assert.equal(r.body.temperature, undefined, `${model} rejects sampling params`);
+    assert.equal(r.body.reasoning_effort, 'none');
+  }
+});
+
+test('openai: a pinned gpt-4o-mini still gets temperature, unchanged', () => {
+  const r = openai.request({ ...ARGS, model: 'gpt-4o-mini' });
+  assert.equal(r.body.temperature, 0.2);
+  assert.equal(r.body.reasoning_effort, undefined);
+});
+
+test('openai: a local model is never caught by the reasoning rule', () => {
+  // The match is anchored, so an id that merely CONTAINS "gpt-5" must not match —
+  // a local server would reject reasoning_effort and lose its sampling parameter.
+  for (const model of ['qwen2.5:14b', 'llama3.1:70b', 'my-finetune-of-gpt-5']) {
+    const r = openai.request({ ...ARGS, model });
+    assert.equal(r.body.temperature, 0.2, `${model} must keep sampling`);
+    assert.equal(r.body.reasoning_effort, undefined, `${model} must not be sent a reasoning budget`);
+  }
+});
+
+test('openai: request honours an explicit drop set', () => {
+  const noTemp = openai.request({ ...ARGS, model: 'gpt-4o-mini', drop: new Set(['temperature']) });
+  assert.equal(noTemp.body.temperature, undefined);
+
+  const noEffort = openai.request({ ...ARGS, model: 'gpt-5.6-luna', drop: new Set(['reasoning_effort']) });
+  assert.equal(noEffort.body.reasoning_effort, undefined);
+  assert.equal(noEffort.body.temperature, undefined, 'dropping the budget must not re-add sampling');
+});
+
+test('openai: unsupportedParam names the one parameter to drop', () => {
+  // The messages OpenAI actually returns.
+  assert.equal(
+    // Copied verbatim from a real 400 returned by gpt-5.6-luna on 2026-08-25.
+    openai.unsupportedParam(400, "Unsupported value: 'temperature' does not support 0.2 with this model. Only the default (1) value is supported."),
+    'temperature'
+  );
+  assert.equal(
+    openai.unsupportedParam(400, 'Unrecognized request argument supplied: reasoning_effort'),
+    'reasoning_effort'
+  );
+
+  // A genuine bad request must NOT be mistaken for a recoverable one, or the pipeline
+  // would quietly strip its own parameters instead of surfacing the real problem.
+  assert.equal(openai.unsupportedParam(400, 'model not found'), null);
+  assert.equal(openai.unsupportedParam(401, 'invalid api key'), null);
+  assert.equal(openai.unsupportedParam(429, 'rate limited'), null);
+  // Names a parameter we never send, so there is nothing to usefully drop.
+  assert.equal(openai.unsupportedParam(400, "Unsupported parameter: 'frequency_penalty'"), null);
+});
+
+test('openai: the two capability hooks never both claim the same error', () => {
+  const cases = [
+    "Unsupported value: 'temperature' does not support 0.2 with this model.",
+    'Unrecognized request argument supplied: reasoning_effort',
+    "Unknown field 'response_format'",
+    'json_schema is not supported',
+  ];
+  for (const text of cases) {
+    const json = openai.unsupportedJsonMode(400, text);
+    const param = openai.unsupportedParam(400, text);
+    assert.ok(!(json && param), `both hooks claimed: ${text}`);
+    assert.ok(json || param, `neither hook claimed a capability error: ${text}`);
+  }
+});
+
 test('openai: a custom host is used verbatim — this is how local models work', () => {
   const r = openai.request({ ...ARGS, model: 'qwen2.5:14b', baseUrl: 'http://localhost:11434/v1' });
   assert.equal(r.url, 'http://localhost:11434/v1/chat/completions');

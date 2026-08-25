@@ -180,7 +180,7 @@ function validate(source, translated) {
  * `usage` is normalised to { inTok, outTok } so the caller never sees a provider's
  * own field names.
  */
-async function callModel(langCode, items, attempt = 1, jsonMode = JSON_MODE) {
+async function callModel(langCode, items, attempt = 1, jsonMode = JSON_MODE, drop = new Set()) {
   const { url, headers, body } = PROVIDER.request({
     model: MODEL,
     system: systemPrompt(langCode),
@@ -189,14 +189,15 @@ async function callModel(langCode, items, attempt = 1, jsonMode = JSON_MODE) {
     key: KEY,
     baseUrl: API_BASE_URL,
     jsonMode,
+    drop,
   });
 
   const split = async (why, mode = jsonMode) => {
     const mid = Math.ceil(items.length / 2);
     process.stderr.write(`  ${why} on ${items.length} units — splitting\n`);
     const [a, b] = await Promise.all([
-      callModel(langCode, items.slice(0, mid), 1, mode),
-      callModel(langCode, items.slice(mid), 1, mode),
+      callModel(langCode, items.slice(0, mid), 1, mode, drop),
+      callModel(langCode, items.slice(mid), 1, mode, drop),
     ]);
     return {
       rows: [...a.rows, ...b.rows],
@@ -219,7 +220,7 @@ async function callModel(langCode, items, attempt = 1, jsonMode = JSON_MODE) {
         `  network error (${String(err.message ?? err).slice(0, 60)}), retry ${attempt} in ${wait}ms\n`
       );
       await new Promise((r) => setTimeout(r, wait));
-      return callModel(langCode, items, attempt + 1, jsonMode);
+      return callModel(langCode, items, attempt + 1, jsonMode, drop);
     }
     throw err;
   }
@@ -236,8 +237,18 @@ async function callModel(langCode, items, attempt = 1, jsonMode = JSON_MODE) {
         process.stderr.write(
           `  server rejected JSON mode "${jsonMode ?? 'schema'}" — retrying with "${next}"\n`
         );
-        return callModel(langCode, items, attempt, next);
+        return callModel(langCode, items, attempt, next, drop);
       }
+    }
+
+    // The same idea one level down: a server that rejects ONE parameter is telling us
+    // about its capabilities, not about a broken run. Drop that parameter and retry.
+    // `drop` only ever grows, so each parameter is dropped at most once and this cannot
+    // loop. Adapters that do not implement the hook are unaffected.
+    const bad = PROVIDER.unsupportedParam?.(res.status, text);
+    if (bad && !drop.has(bad)) {
+      process.stderr.write(`  server rejected "${bad}" — retrying without it\n`);
+      return callModel(langCode, items, attempt, jsonMode, new Set(drop).add(bad));
     }
 
     const retryable = res.status === 429 || res.status >= 500;
@@ -245,7 +256,7 @@ async function callModel(langCode, items, attempt = 1, jsonMode = JSON_MODE) {
       const wait = Math.min(2 ** attempt * 1000, 30000);
       process.stderr.write(`  HTTP ${res.status}, retry ${attempt} in ${wait}ms\n`);
       await new Promise((r) => setTimeout(r, wait));
-      return callModel(langCode, items, attempt + 1, jsonMode);
+      return callModel(langCode, items, attempt + 1, jsonMode, drop);
     }
     throw new Error(`${PROVIDER.label ?? PROVIDER.id} HTTP ${res.status}: ${text.slice(0, 300)}`);
   }
