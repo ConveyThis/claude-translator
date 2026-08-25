@@ -16,8 +16,8 @@ is the difference between fixing something and silently re-introducing it.
 ## Development setup
 
 ```bash
-git clone https://github.com/ConveyThis/static-site-localization.git
-cd static-site-localization
+git clone https://github.com/ConveyThis/claude-translator.git
+cd claude-translator
 npm install
 npm run check          # every script parses
 ```

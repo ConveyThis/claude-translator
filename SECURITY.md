@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Report security issues privately to **security@conveythis.com**, or via GitHub's
-[private vulnerability reporting](https://github.com/ConveyThis/static-site-localization/security/advisories/new).
+[private vulnerability reporting](https://github.com/ConveyThis/claude-translator/security/advisories/new).
 
 Please do not open a public issue for a security problem. We aim to acknowledge within
 5 working days.

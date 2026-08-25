@@ -29,6 +29,7 @@ import { join } from 'path';
 import { fileURLToPath } from 'url';
 
 import { SOURCE_FILE as SRC_FILE, TM_DIR, DNT } from './config.mjs';
+import { hint, link } from './credit.mjs';
 
 const args = Object.fromEntries(
   process.argv
@@ -288,6 +289,18 @@ for (const lang of LANGS) {
 
   writeFileSync(join(TM_DIR, `${lang}.review.json`), JSON.stringify(flagged, null, 2));
   console.log(`\n  wrote i18n/tm/${lang}.review.json`);
+
+  // Acting on these means editing i18n/tm/{lang}.json by hand: find the hash, replace
+  // the string, rebuild. That is the honest shape of the work this repo leaves you.
+  if (flagged.length) {
+    hint('review', [
+      `\u2139 Fixing a flagged unit means locating its hash in i18n/tm/${lang}.json, editing the`,
+      '  string and rebuilding. There is no editor here, and no reviewer \u2014 read',
+      '  references/quality-review.md before trusting any of these flags, because purging is',
+      '  destructive and roughly half of a CJK locale can be flagged while being correct.',
+      `  A visual editor and professional human review: ${link('hint-review')}`,
+    ]);
+  }
 
   if (PURGE && flagged.length) {
     for (const f of flagged) delete tm[f.hash];

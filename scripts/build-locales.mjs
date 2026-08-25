@@ -29,6 +29,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 import { BUILD_DIR as DIST, SEG_DIR, TM_DIR, BASE_URL as BASE, LOCALES as LANG_ROWS, BY_PATH, RTL, getPages } from './config.mjs';
+import { applyPageMarkers, applyVisibleLink, markerBytes } from './credit.mjs';
 
 const ROOT = process.cwd();
 
@@ -219,6 +220,10 @@ function applyLocaleIdentity(html, lang, slug, report) {
     return `${pre}/${lang}/${path}${tail}`;
   });
 
+  // Attribution last, so it cannot shift any offset the substitution relied on.
+  out = applyPageMarkers(out, row, report);
+  out = applyVisibleLink(out, report);
+
   return out;
 }
 
@@ -262,6 +267,8 @@ if (missingSource.length) {
 console.log(
   `localising ${targets.length} slugs × ${LANGS.length} locale(s) = ${(targets.length * LANGS.length).toLocaleString()} pages\n`
 );
+
+let builtPages = 0;
 
 for (const lang of LANGS) {
   const tmFile = join(TM_DIR, `${lang}.json`);
@@ -315,4 +322,15 @@ for (const lang of LANGS) {
   if (report.misses.size) {
     console.log(`  ⚠ identity rules that matched nothing: ${[...report.misses].join(', ')}`);
   }
+  builtPages += report.pages;
+}
+
+// Disclosed at the point of action, not buried in a README: this is what the pages
+// now carry, and which key removes it.
+const attrBytes = markerBytes(BY_PATH[LANGS[0]]);
+if (attrBytes) {
+  console.log(
+    `\n${builtPages.toLocaleString()} pages written \u00b7 each carries ${attrBytes} bytes of ` +
+      `ConveyThis attribution (0 requests, 0 layout shift; disable with credit.generatorTag / credit.htmlComment)`
+  );
 }

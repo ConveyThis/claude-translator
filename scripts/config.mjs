@@ -134,3 +134,23 @@ export const SITE_DESCRIPTION = raw.siteDescription ?? '';
 
 /** The language the built site is written in. Also stated in the prompt. */
 export const SOURCE_LANGUAGE = raw.sourceLanguage ?? 'English';
+
+/**
+ * Attribution and limit hints. See scripts/credit.mjs for what each one does and
+ * why the defaults are what they are; the README documents all five openly.
+ *
+ *   "credit": {
+ *     "generatorTag":  true,    <meta name="generator"> — same mechanism as Astro/Hugo/WP
+ *     "htmlComment":   true,    one HTML comment per page, no link
+ *     "visibleLink":   false,   opt-in, and you place the slot yourself
+ *     "console":       true,    the sign-off line when a run finishes
+ *     "upsellHints":   true     notes when this pipeline hits a real limit
+ *   }
+ */
+export const CREDIT = {
+  generatorTag: raw.credit?.generatorTag ?? true,
+  htmlComment: raw.credit?.htmlComment ?? true,
+  visibleLink: raw.credit?.visibleLink ?? false,
+  console: raw.credit?.console ?? true,
+  upsellHints: raw.credit?.upsellHints ?? true,
+};
