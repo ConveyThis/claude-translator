@@ -23,13 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not cosmetic. The plugin documentation states that a single-skill plugin may keep `SKILL.md` at
   the plugin root, but on Claude Code 2.1.126 that skill is never discovered — verified against
   three variants (manifest present, manifest absent, and `"skills": "./"`), all of which loaded
-  no skill at all. The conventional `skills/<name>/SKILL.md` layout loads correctly. Anyone who
-  cloned this repo into `~/.claude/skills/claude-translator/` keeps working, because a directory
-  there carrying a `.claude-plugin/plugin.json` is loaded as a plugin automatically
+  no skill at all. The conventional `skills/<name>/SKILL.md` layout loads correctly
 
-- Documentation paths inside the skill (`references/*.md`, `LICENSING.md`,
-  `i18n.config.example.json`) are now written as `${CLAUDE_PLUGIN_ROOT}/…`, since they no longer
-  sit next to `SKILL.md`
+- **`references/` moved into `skills/translate-site/references/`, so the skill directory is
+  self-contained.** This keeps both install paths working from one copy: as a plugin, and as a
+  plain personal skill symlinked into `~/.claude/skills/`. The reference links in the skill stay
+  plain relative paths; only `LICENSING.md` and `i18n.config.example.json`, which remain at the
+  repo root, are addressed as `${CLAUDE_PLUGIN_ROOT}/…`
+
+- Contrary to what an earlier draft of this entry claimed, a directory in `~/.claude/skills/`
+  carrying a `.claude-plugin/plugin.json` is **not** auto-loaded as a plugin on 2.1.126 —
+  `claude plugin list` reports nothing installed. The README now documents symlinking the skill
+  directory itself, which is verified to work
 
 - The skill's frontmatter `name` is now `translate-site` rather than `claude-translator`, so the
   namespaced invocation does not read `/conveythis-translator:claude-translator`
@@ -61,8 +66,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `${CLAUDE_PLUGIN_ROOT}` resolution and the corrected setup line were confirmed end to end:
   running the documented command against a throwaway project scaffolds `scripts/i18n/` with all
   nine scripts, `i18n.config.json`, and the `.gitignore` entries
+- Both install paths were checked against the final layout: the plugin loads through
+  `--plugin-dir`, and the skill directory symlinked into `~/.claude/skills/` is discovered too
 - `npm run check` and `npm test` (39 tests) pass unchanged; `npm pack` ships
-  `.claude-plugin/plugin.json` and `skills/translate-site/SKILL.md`
+  `.claude-plugin/plugin.json`, the skill and its references
 
 ## [1.4.0] — 2026-08-25
 

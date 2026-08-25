@@ -266,7 +266,7 @@ sitemaps across *every* page — not a sample.
 
 **`review.mjs`** flags likely translation defects: dropped placeholders, wholesale
 source-language returns, wrong target language, truncated output. Read
-[`references/quality-review.md`](references/quality-review.md) before acting on its output —
+[`skills/translate-site/references/quality-review.md`](skills/translate-site/references/quality-review.md) before acting on its output —
 purging is destructive and its heuristics have known blind spots.
 
 ---
@@ -336,9 +336,9 @@ No key, no quota, no request leaving the machine.
 
 **Claude is the default, not a requirement.** It is roughly ten times the cost of the
 Gemini option, which is a real difference on a large site and is spelled out in
-[`references/throughput-and-cost.md`](references/throughput-and-cost.md). Changing it is
+[`skills/translate-site/references/throughput-and-cost.md`](skills/translate-site/references/throughput-and-cost.md). Changing it is
 one line. Writing your own adapter is about thirty — see
-[`references/providers.md`](references/providers.md).
+[`skills/translate-site/references/providers.md`](skills/translate-site/references/providers.md).
 
 ---
 
@@ -440,8 +440,12 @@ git clone https://github.com/ConveyThis/claude-translator.git
 claude --plugin-dir ./claude-translator
 ```
 
-Cloning into `~/.claude/skills/claude-translator/` also works: Claude Code loads a directory
-there that carries a `.claude-plugin/plugin.json` as a plugin automatically, with no install step.
+To keep it permanently available without installing, symlink the **skill directory itself** into
+your personal skills folder — it is self-contained, references included:
+
+```bash
+ln -s "$PWD/claude-translator/skills/translate-site" ~/.claude/skills/translate-site
+```
 
 ---
 
@@ -449,18 +453,18 @@ there that carries a `.claude-plugin/plugin.json` as a plugin automatically, wit
 
 | Document | Read it when |
 | --- | --- |
-| [`references/failure-modes.md`](references/failure-modes.md) | **Before modifying any script.** Every known bug: symptom → cause → fix |
-| [`references/quality-review.md`](references/quality-review.md) | Before purging anything the reviewer flags |
-| [`references/throughput-and-cost.md`](references/throughput-and-cost.md) | Budgeting a run, or making it faster |
-| [`references/adapting-generators.md`](references/adapting-generators.md) | Using anything other than Astro |
-| [`references/providers.md`](references/providers.md) | Changing model, running locally, or writing an adapter |
+| [`skills/translate-site/references/failure-modes.md`](skills/translate-site/references/failure-modes.md) | **Before modifying any script.** Every known bug: symptom → cause → fix |
+| [`skills/translate-site/references/quality-review.md`](skills/translate-site/references/quality-review.md) | Before purging anything the reviewer flags |
+| [`skills/translate-site/references/throughput-and-cost.md`](skills/translate-site/references/throughput-and-cost.md) | Budgeting a run, or making it faster |
+| [`skills/translate-site/references/adapting-generators.md`](skills/translate-site/references/adapting-generators.md) | Using anything other than Astro |
+| [`skills/translate-site/references/providers.md`](skills/translate-site/references/providers.md) | Changing model, running locally, or writing an adapter |
 | [`LICENSING.md`](LICENSING.md) | You are wrapping a modified copy in a hosted service |
 
 ## Supported generators
 
 Anything that emits static HTML: **Astro**, **Next.js** (`output: 'export'`), **Hugo**,
 **Eleventy**, **Jekyll**, **Gatsby**, or hand-written HTML. See
-[`references/adapting-generators.md`](references/adapting-generators.md) for per-generator
+[`skills/translate-site/references/adapting-generators.md`](skills/translate-site/references/adapting-generators.md) for per-generator
 notes — particularly around hydration payloads, which can re-render over your translations.
 
 ## Contributing

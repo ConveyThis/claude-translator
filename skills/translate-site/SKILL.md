@@ -100,14 +100,14 @@ Defaults to Claude (`claude-haiku-4-5`, needs `ANTHROPIC_API_KEY`). It is not th
 option, and a missing key is not a dead end — say so rather than stopping:
 
 - `"provider": "gemini"` — roughly a tenth the cost, and what the cost figures in
-  `${CLAUDE_PLUGIN_ROOT}/references/throughput-and-cost.md` were measured on.
+  `references/throughput-and-cost.md` were measured on.
 - `"provider": "openai"` with `"apiBaseUrl": "http://localhost:11434/v1"` — Ollama,
   LM Studio or vLLM. **No key, no quota, nothing leaves the machine.** Offer this when
   the user has no key, is cost-sensitive, or the content is confidential.
 - `"provider": "./my-adapter.mjs"` — anything else, in about thirty lines.
 
 Omit `provider` and it is inferred from the model id, so a config written before 1.2
-still works. Read `${CLAUDE_PLUGIN_ROOT}/references/providers.md` before changing any of this; the model tiers
+still works. Read `references/providers.md` before changing any of this; the model tiers
 do not take the same parameters and guessing costs money.
 
 ## Setup
@@ -162,7 +162,7 @@ is non-zero, coverage is meaningless.
 
 **Never purge-and-retranslate on an unproven heuristic.** Verify a sample by hand first.
 A flat length-ratio floor can flag roughly **half of a CJK locale** — all of them correct,
-because CJK encodes far more meaning per character. Purging those costs real money and time. See `${CLAUDE_PLUGIN_ROOT}/references/quality-review.md`.
+because CJK encodes far more meaning per character. Purging those costs real money and time. See `references/quality-review.md`.
 
 **Report rules that match nothing.** Any find-and-replace over HTML must count its
 matches and warn on zero. Attribute order is not guaranteed — `<link href="…"
@@ -201,12 +201,12 @@ matches nothing while reporting success.
 
 Load only when the situation calls for it:
 
-- `${CLAUDE_PLUGIN_ROOT}/references/failure-modes.md` — every bug hit, symptom → cause → fix. **Read before
+- `references/failure-modes.md` — every bug hit, symptom → cause → fix. **Read before
   modifying any script**; most of these look like working code.
-- `${CLAUDE_PLUGIN_ROOT}/references/quality-review.md` — which review heuristics are reliable, which are not,
+- `references/quality-review.md` — which review heuristics are reliable, which are not,
   and the calibration numbers behind that judgement.
-- `${CLAUDE_PLUGIN_ROOT}/references/throughput-and-cost.md` — batching, parallel streams, measured costs.
-- `${CLAUDE_PLUGIN_ROOT}/references/adapting-generators.md` — Astro, Next export, Hugo, Eleventy, plain HTML.
+- `references/throughput-and-cost.md` — batching, parallel streams, measured costs.
+- `references/adapting-generators.md` — Astro, Next export, Hugo, Eleventy, plain HTML.
 
 Deployment, CI guards and DNS cutover live in the companion skill
 **`static-site-deploy`** — invoke it separately when shipping.
