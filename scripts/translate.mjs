@@ -27,10 +27,11 @@ import { join } from 'path';
 import { fileURLToPath } from 'url';
 
 import {
-  SOURCE_FILE as SRC_FILE, TM_DIR, LOCALES, RTL, DNT, MODEL as CFG_MODEL,
+  SOURCE_FILE as SRC_FILE, TM_DIR, LOCALES, RTL, DNT, GLOSSARY, MODEL as CFG_MODEL,
   ROOT_DIR as ROOT, SITE_NAME, SITE_DESCRIPTION, SOURCE_LANGUAGE,
   PROVIDER as CFG_PROVIDER, API_BASE_URL, API_KEY_ENV, JSON_MODE, PRICING,
 } from './config.mjs';
+import { termsForBatch, glossaryPrompt, glossaryFingerprint, containsTerm } from './glossary.mjs';
 import { hint, link } from './credit.mjs';
 import { loadProvider, extractJson } from './providers/index.mjs';
 
@@ -115,10 +116,17 @@ const TECH_TOKENS = [
   'OCR', 'GDPR', 'SSL', 'TLS', 'API', 'SDK', 'URL', 'HTTP', 'HTTPS', 'SEO', 'CSS', 'RSS',
 ];
 
-const GLOSSARY = [...new Set([...DNT.brands, ...DNT.formats, ...TECH_TOKENS])];
+/**
+ * The flat never-translate list that still goes into rule 2. The structured glossary
+ * (config.GLOSSARY) carries the same brands plus per-locale targets and is injected
+ * per batch; this line stays because format and protocol tokens are correct unchanged
+ * in every language and are cheap to state once.
+ */
+const DNT_NAMES = [...new Set([...DNT.brands, ...DNT.formats, ...TECH_TOKENS])];
 
-function systemPrompt(langCode) {
+function systemPrompt(langCode, batchTerms = []) {
   const name = LANG_NAMES[langCode] ?? langCode;
+  const terminology = glossaryPrompt(batchTerms, langCode);
   return [
     `You are a professional translator localising the website of ${SITE_NAME}${SITE_DESCRIPTION ? `, ${SITE_DESCRIPTION}` : ''}.`,
     `Translate from ${SOURCE_LANGUAGE} into ${name} (${langCode}).`,
@@ -127,7 +135,9 @@ function systemPrompt(langCode) {
     `1. Preserve every placeholder EXACTLY: <0>, </0>, <1/> and so on. Same count, same numbers.`,
     `   Placeholders wrap inline markup — move them so they wrap the equivalent words in your`,
     `   translation, but never drop, add, renumber or reorder their nesting.`,
-    `2. Never translate these names: ${GLOSSARY.join(', ')}.`,
+    `2. Never translate these names: ${DNT_NAMES.join(', ')}.`,
+    `   Match whole words, and respect capitalisation: a lowercase common noun that`,
+    `   happens to spell a brand name is the common noun, and must be translated.`,
     `3. This is marketing and product copy. Translate meaning and tone, not word for word.`,
     `   Keep it natural and idiomatic for a native reader.`,
     `4. Keep numbers, prices, file sizes and counts unchanged (e.g. "120+", "1 GB", "10 MB").`,
@@ -135,6 +145,7 @@ function systemPrompt(langCode) {
     `   target language allows it. Headings stay headings; button labels stay short.`,
     `6. Do not add explanations, notes or quotes around the result.`,
     RTL.has(langCode) ? `7. ${name} is right-to-left. Write natural RTL text; do not insert directional marks.` : ``,
+    terminology,
     ``,
     `Return a JSON array. For each input item return { "id": <same id>, "text": "<translation>" }.`,
   ]
@@ -181,9 +192,13 @@ function validate(source, translated) {
  * own field names.
  */
 async function callModel(langCode, items, attempt = 1, jsonMode = JSON_MODE, drop = new Set()) {
+  // Recomputed per call, not per run, so a batch that gets halved on a safety block or a
+  // truncation carries exactly the terms its own half contains.
+  const batchTerms = termsForBatch(GLOSSARY, items.map((i) => i.text), langCode);
+
   const { url, headers, body } = PROVIDER.request({
     model: MODEL,
-    system: systemPrompt(langCode),
+    system: systemPrompt(langCode, batchTerms),
     items,
     temperature: attempt === 1 ? 0.2 : 0.4,
     key: KEY,
@@ -308,6 +323,53 @@ async function translateLang(langCode, units) {
   const tmFile = join(TM_DIR, `${langCode}${TAG}.json`);
   const tm = existsSync(tmFile) ? JSON.parse(readFileSync(tmFile, 'utf8')) : {};
 
+  // ── Glossary invalidation ──────────────────────────────────────────────────
+  // The memory is keyed by the source hash alone, so editing a glossary target used to
+  // change nothing: every affected unit was already in the memory and got skipped, and
+  // the new terminology silently never shipped. The sidecar records the fingerprint the
+  // memory was built against; when it moves, the units containing an affected term are
+  // dropped so they re-translate. Only those — a term change must not cost a full locale.
+  //
+  // It is a SIDECAR, not a key inside the memory, because README documents
+  // i18n/tm/{lang}.json as a hand-editable hash -> string map and three other scripts
+  // iterate it. A `__meta` key would have made every coverage count off by one.
+  const metaFile = join(TM_DIR, `${langCode}${TAG}.meta.json`);
+  const meta = existsSync(metaFile) ? JSON.parse(readFileSync(metaFile, 'utf8')) : {};
+  const fingerprint = glossaryFingerprint(GLOSSARY);
+
+  if (typeof meta.glossary === 'string' && meta.glossary !== fingerprint) {
+    const before = new Set(meta.glossary.split('\n').filter(Boolean));
+    const after = new Set(fingerprint.split('\n').filter(Boolean));
+    // A term whose line is missing from either side has been added, removed or edited.
+    const changed = GLOSSARY.filter((t) => {
+      const line = glossaryFingerprint([t]);
+      return !before.has(line) || !after.has(line);
+    });
+    // Removed terms are gone from GLOSSARY, so recover them from the old fingerprint to
+    // re-translate units that were constrained by a rule the user has just deleted.
+    const removedSources = [...before]
+      .filter((line) => !after.has(line))
+      .map((line) => line.split('|')[2])
+      .filter(Boolean);
+
+    let dropped = 0;
+    for (const [hash, unit] of units) {
+      if (!(hash in tm)) continue;
+      const hit =
+        changed.some((t) => containsTerm(unit.text, t)) ||
+        removedSources.some((src) => containsTerm(unit.text, { source: src, matchCase: false }));
+      if (hit) {
+        delete tm[hash];
+        dropped++;
+      }
+    }
+    if (dropped) {
+      process.stderr.write(
+        `  glossary changed — re-translating ${dropped.toLocaleString()} affected unit(s)\n`
+      );
+    }
+  }
+
   const pending = units.filter(([hash]) => !(hash in tm));
 
   // Re-run churn. The memory is keyed by source hash, so on an existing locale the
@@ -330,6 +392,11 @@ async function translateLang(langCode, units) {
 
   if (pending.length === 0) {
     console.log(`${langCode}: nothing to do (${Object.keys(tm).length} in memory)`);
+    // Nothing pending means nothing was dropped, so the memory on disk already matches
+    // this glossary — safe to record the fingerprint without a translation pass. The
+    // fingerprint is never written ahead of a TM flush: if a run dies mid-way, the next
+    // one must still see a stale fingerprint and re-drop the affected units.
+    writeFileSync(metaFile, JSON.stringify({ ...meta, glossary: fingerprint }, null, 2));
     return;
   }
 
@@ -352,6 +419,7 @@ async function translateLang(langCode, units) {
   let sinceFlush = 0;
   const flush = () => {
     writeFileSync(tmFile, JSON.stringify(tm, null, 2));
+    writeFileSync(metaFile, JSON.stringify({ ...meta, glossary: fingerprint }, null, 2));
     sinceFlush = 0;
   };
 

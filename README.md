@@ -8,13 +8,14 @@ static pages — without re-rendering it, and without breaking Core Web Vitals.*
 [![Claude Skill](https://img.shields.io/badge/Claude-Skill-8A63D2.svg)](#using-it-as-a-claude-code-skill)
 
 Point it at a built site, give it a list of locales and your own model API key, and it
-produces a complete localized copy of every page — with correct `hreflang`, canonicals,
-`dir="rtl"`, per-locale JSON-LD and sitemaps — then proves the result with six gates and a
-full SEO audit.
+produces a complete localized copy of every page — correcting `hreflang`, canonicals,
+`dir="rtl"` and per-locale JSON-LD as it goes — then proves the result with eight gates and
+a full SEO audit. It holds your terminology, protects your brand names, and writes numbers
+the way each locale writes them.
 
 Built and maintained by **[ConveyThis](https://www.conveythis.com/open-source/claude-translator?utm_source=claude-skill&utm_medium=readme-byline&utm_campaign=claude-translator)**.
 This is the pipeline that runs **www.conveythis.com itself** — a 238-page Astro site,
-live in 55 languages, on the same six scripts in this repo.
+live in 55 languages, on the same scripts in this repo.
 
 > Not affiliated with or endorsed by Anthropic. "Claude" is a trademark of Anthropic, PBC.
 > This project is named for the model family it ships configured to use; it works just as
@@ -145,8 +146,9 @@ npm run build                                        # your normal build
 node scripts/i18n/extract.mjs                        # find translatable units
 node scripts/i18n/translate.mjs --lang es,fr,de      # translate (uses your key)
 node scripts/i18n/build-locales.mjs --lang all       # write localized pages
-node scripts/i18n/verify.mjs --lang all              # six gates
+node scripts/i18n/verify.mjs --lang all              # eight gates
 node scripts/i18n/audit-seo.mjs                      # full SEO audit
+node scripts/i18n/tqa.mjs --lang es                  # MQM quality score (optional)
 ```
 
 Deploy the resulting build directory exactly as you deploy it today.
@@ -216,6 +218,8 @@ read, and this is AGPL software whose point is that you can change them.
 | `pages.source` | `"build"` to derive from output, or a path to a slug list |
 | `pages.exclude` | First path segments never to localize — 404 pages, CMS admin shells |
 | `doNotTranslate` | Brand names and formats that must survive unchanged |
+| `glossary` | Term base — an array, or a path to a JSON file. See [Terminology](#terminology-and-brand-names) |
+| `localeFormat` | Number, percent and currency **formatting**. See [Numbers and money](#numbers-and-money) |
 | `provider` | `anthropic` (default), `gemini`, `openai`, or a path to your own adapter |
 | `model` | Any model id for that provider — defaults to the provider's own |
 | `apiBaseUrl` | Model API host. Set this for local models, Azure or a gateway. **Not** `baseUrl`, which is your site |
@@ -229,24 +233,130 @@ read, and this is AGPL software whose point is that you can change them.
 
 ## What you get
 
-For every page, in every locale:
+**Read this section as "corrected", not "created".** With one exception, this tool does not
+add tags to your pages — it rewrites the values on tags your template already emits. That is
+deliberate: inserting markup would break the byte-identical guarantee that
+[Does it hold?](#does-it-hold) rests on. It also means **your template has to emit the tags
+in the first place**, and the two lists below are the difference between what we fix and
+what you must supply.
 
-- `<html lang>` and `dir="rtl"` where the script requires it
-- A self-referencing canonical — `https`, no trailing slash
-- A complete `hreflang` set: every locale, plus `x-default` and the source language
-  pointing at the **original** page, not at self
-- `og:url` / `og:locale`
-- JSON-LD with per-locale `@id`, `url` and `inLanguage` — and `Organization` left alone,
-  because a company is one entity in every language
-- Locale-prefixed internal links
-- Per-locale sitemaps
+### Rewritten for you, on every page, in every locale
+
+- `<html lang>`, and `dir` flipped to `rtl` where the script requires it — the `lang` and
+  `dir` **attributes must already be present** on `<html>`; the value is replaced, never added
+- The canonical `href` → this locale's page, `https`, no trailing slash
+- The `x-default` and source-language `hreflang` hrefs → pointed at the **original** page,
+  not at self. These two are the ones people get wrong; they are also **the only two
+  `hreflang` links this tool touches**
+- `og:url` / `og:locale` `content` values
+- JSON-LD `@id`, `url` and `inLanguage`, per locale — with `Organization` left alone,
+  because a company is one entity in every language, and anything unparseable returned
+  byte-for-byte
+- Internal links, locale-prefixed — assets and anchors left alone
+- Your language picker's current-language label and `aria-current`, if it ships the
+  `data-i18n-current-lang` / `data-i18n-lang` markers
+
+The only thing ever *inserted* is the ~150-byte attribution described under
+[Attribution](#attribution), and you can turn it off.
+
+### Your template must supply these — we audit them, we do not generate them
+
+- **The full `hreflang` mesh.** One `<link rel="alternate">` per locale, plus `x-default`
+  and the source language. We rewrite two of those hrefs and check all of them; we emit
+  none of them. A site with no alternates gets no alternates.
+- **`sitemap.xml`, and any per-locale sitemaps it indexes.** `audit-seo.mjs` validates that
+  every sitemap lists the right URLs, that they are `https`, and that each resolves to a
+  built page — but nothing in this repo writes a sitemap file.
+- **`robots.txt`.** Never read, never written.
+- **`og:image`, `twitter:card`, `twitter:site`.** Left untouched. The *text* fields
+  (`og:title`, `og:description`, `twitter:title`, image `alt`) are translated.
+
+**Nothing here fails silently.** Every rewrite rule reports when it matched nothing, so a
+template change turns into a printed miss rather than a quiet no-op, and `audit-seo.mjs`
+checks the whole mesh on *every* page rather than a sample. If your template is missing the
+alternates, you will hear about it on the first run — see
+[`references/adapting-generators.md`](skills/translate-site/references/adapting-generators.md).
+
+## Terminology and brand names
+
+Two different problems, one file.
+
+**Consistency.** Identical strings are already consistent for free: units are keyed by the
+hash of the source text, so a header translated once is reused on every page and across
+runs. What that cannot do is hold a *term inside varying sentences* — "Dashboard" in two
+different paragraphs is two different units, in two different batches, in two stateless
+requests. A glossary fixes that.
+
+**Sense.** `Apple` the company must survive; `apple` the fruit must be translated. A flat
+list of names cannot express the difference.
+
+```json
+// glossary.json
+[
+  { "source": "Acme",      "rule": "keep", "matchCase": true },
+  { "source": "Dashboard", "rule": "translate",
+    "targets": { "es": "Panel de control", "pt-br": "Painel" } }
+]
+```
+
+| Field | Meaning |
+| --- | --- |
+| `rule: "keep"` | Leave it in the source language. Defaults to **case-sensitive** |
+| `rule: "translate"` | Pin the wording per locale via `targets` |
+| `matchCase` | Override the default. `true` means `Apple` is protected and `apple` is not |
+| `note` | Free text, passed to the translator and to the quality judge as context |
+
+Matching is **whole-word**, always — `Apple` never matches inside `Applesauce` or
+`Appleton`. Only the terms that actually occur in a batch are sent to the model, so a
+500-term glossary does not inflate the prompt of every request.
+
+Your existing `doNotTranslate.brands` is folded in automatically as case-sensitive `keep`
+rules, so upgrading gains you word-boundary matching and, for the first time, **gate 7**,
+which checks the terms actually survived. Before 2.0 nothing verified that: a brand could
+be translated away and every gate still passed.
+
+Editing a glossary target re-translates **only** the units containing that term. A
+fingerprint sidecar next to the memory records what it was built against.
+
+## Numbers and money
+
+`1,234.56` is `1.234,56` in German and `1 234,56` in French. `$5` is `5,00 $US` in French.
+Getting this wrong is one of the most visible marks of a machine translation, and models
+are unreliable at it — so the model is told to leave numbers **alone** (rule 4), and the
+formatting is applied deterministically afterwards with `Intl`.
+
+```json
+"localeFormat": { "numbers": true, "percent": true, "currency": "format", "units": "off" }
+```
+
+**Currency is formatted, never converted, and there is no option to convert it.** A price
+is a commercial commitment. Converting one at a rate baked into a build — a rate that is
+stale the day after it is written — is how a translation tool starts publishing wrong
+offers. What you get instead is `i18n/locale-format.json`, listing every monetary amount
+found, so a human can decide per market.
+
+**Gate 8 backs this up**: if the *value* of a number changes between source and
+translation, the build fails. A model that quietly ships `$39` where the source said `$49`
+passes every other check — the markup is identical, the placeholders match, the length is
+plausible and the Spanish is fluent.
+
+Things it deliberately leaves alone, because a "fix" here is a corruption: version numbers
+(`Node 20.5.1`), times (`10:30`), IP addresses, ISO dates, phone numbers, fractions, and
+any ungrouped number. Only unambiguous quantities are touched.
+
+Unit conversion (in→cm, °F→°C) is **not implemented**. The `units` key is accepted and
+ignored so a config written today keeps parsing when it lands.
+
+> One thing that looks like a bug and is not: Spanish does not group four-digit numbers,
+> so `1,234.50` correctly becomes `1234,50` in `es` and `1.234,50` in `de`. That is CLDR,
+> and there is a test pinning it.
 
 ## Trusting the output
 
 Machine translation at scale fails in ways that look like success. Two commands exist to
 catch that.
 
-**`verify.mjs` — six gates**
+**`verify.mjs` — eight gates**
 
 | # | Gate | Catches |
 | --- | --- | --- |
@@ -256,6 +366,8 @@ catch that.
 | 4 | Locale identity | wrong `lang`, canonical, `hreflang` or JSON-LD |
 | 5 | Coverage | share of extracted segments present in the memory |
 | 6 | **Never offered** | visible text the extractor never picked up |
+| 7 | Glossary | a protected brand that got translated, or a pinned term rendered some other way |
+| 8 | Numeric integrity | a number whose **value** changed — `$49` shipped as `$39` |
 
 Gate 6 exists because **coverage is not completeness**. Coverage measures
 translated-of-*extracted*, so it is structurally blind to extraction bugs. A single bug has
@@ -264,6 +376,42 @@ untranslated. Gate 6 compares built output against the source instead.
 
 **`audit-seo.mjs`** then checks canonicals, the full hreflang mesh, `og` tags, JSON-LD and
 sitemaps across *every* page — not a sample.
+
+**`tqa.mjs` — a quality score you can reproduce**
+
+The gates prove the plumbing. They say nothing about whether the Spanish is any *good*.
+That is what `tqa.mjs` is for.
+
+```bash
+node scripts/i18n/tqa.mjs --lang es --dry      # sample size and cost, no API call
+node scripts/i18n/tqa.mjs --lang es,fr,de      # writes i18n/tqa/{lang}.json + scorecard.md
+node scripts/i18n/tqa.mjs --lang es --repeat   # judge the same sample twice, report the gap
+```
+
+It scores a **stratified sample** — weighted by how often each string appears on the site,
+so the header everyone reads counts for more than a one-off footnote — using the **MQM**
+error typology the localization industry already uses:
+
+```
+score = 100 − (weighted error points ÷ words) × 100      minor 1 · major 5 · critical 10
+```
+
+Four things make the number honest rather than decorative:
+
+- **The judge defaults to a different provider than the translator.** Models prefer their
+  own output. If no second key is configured it says so, loudly, in the run and in the
+  report.
+- **The sample is seeded.** `--seed` reproduces a score exactly. A quality figure nobody
+  can re-derive is a marketing figure.
+- **`--repeat` reports the judge's own variance** by scoring the same sample twice. A score
+  quoted without its noise invites people to over-read a decimal place.
+- **A unit the judge cannot assess is excluded, not counted as clean.** During development
+  a misconfigured endpoint failed every single unit and the run printed `100.00 / 100` from
+  an empty sample. It now refuses to report a score at all in that case.
+
+Read it as a comparison — between locales, between models, between runs — and not as a
+grade. It is one model's opinion of another's work, it is not a human review, and the
+report says so on its face.
 
 **`review.mjs`** flags likely translation defects: dropped placeholders, wholesale
 source-language returns, wrong target language, truncated output. Read
@@ -290,7 +438,7 @@ working unchanged.
 **What "verified" means in that last column.** On 2026-08-25 each of the three adapters
 translated the same 98-unit, 1,381-word English site into Russian at its default model, as a
 real billed API call, with the translation memory deleted between runs so no provider could
-reuse another's work. Every run cleared all six gates in `verify.mjs` and produced a clean
+reuse another's work. Every run cleared all gates in `verify.mjs` and produced a clean
 `audit-seo.mjs` — 0 findings — and no run had a single failed unit. Measured cost: $0.025
 (Claude), $0.002 (Gemini), and 3,453/2,855 tokens on OpenAI, which the adapter deliberately
 does not price because it points at dozens of endpoints, some of them free and local.
@@ -455,7 +603,7 @@ ln -s "$PWD/claude-translator/skills/translate-site" ~/.claude/skills/translate-
 | Document | Read it when |
 | --- | --- |
 | [`skills/translate-site/references/failure-modes.md`](skills/translate-site/references/failure-modes.md) | **Before modifying any script.** Every known bug: symptom → cause → fix |
-| [`skills/translate-site/references/quality-review.md`](skills/translate-site/references/quality-review.md) | Before purging anything the reviewer flags |
+| [`skills/translate-site/references/quality-review.md`](skills/translate-site/references/quality-review.md) | Before purging anything the reviewer flags, or reading a TQA score |
 | [`skills/translate-site/references/throughput-and-cost.md`](skills/translate-site/references/throughput-and-cost.md) | Budgeting a run, or making it faster |
 | [`skills/translate-site/references/adapting-generators.md`](skills/translate-site/references/adapting-generators.md) | Using anything other than Astro |
 | [`skills/translate-site/references/providers.md`](skills/translate-site/references/providers.md) | Changing model, running locally, or writing an adapter |

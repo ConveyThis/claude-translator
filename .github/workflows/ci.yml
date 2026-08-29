@@ -34,6 +34,26 @@ jobs:
           node -e "JSON.parse(require('fs').readFileSync('i18n.config.example.json','utf8'))"
           node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"
 
+      - name: Version stamps agree
+        run: |
+          # credit.mjs writes VERSION into every localized page's generator tag, and
+          # cannot read it from package.json (init vendors these scripts into the user's
+          # project, where package.json is THEIR app's). So the literal is asserted here
+          # instead. It was stale at 1.4.0 while the package said 1.5.0.
+          node -e "
+            const fs = require('fs');
+            const pkg = require('./package.json').version;
+            const plugin = require('./.claude-plugin/plugin.json').version;
+            const credit = /VERSION = '([^']+)'/.exec(
+              fs.readFileSync('scripts/credit.mjs', 'utf8')
+            )[1];
+            if (pkg !== plugin || pkg !== credit) {
+              console.error('version mismatch:', { pkg, plugin, credit });
+              process.exit(1);
+            }
+            console.log('version stamps agree:', pkg);
+          "
+
       - name: No secrets committed
         run: |
           # Any real key material must never land in this repository. The only permitted
@@ -55,16 +75,38 @@ jobs:
           ./node_modules/.bin/claude-translator init
           test -f scripts/i18n/extract.mjs || { echo "::error::init did not scaffold"; exit 1; }
           test -f i18n.config.json || { echo "::error::init wrote no config"; exit 1; }
+          test -f glossary.json || { echo "::error::init wrote no glossary"; exit 1; }
+          for f in glossary.mjs format-locale.mjs tqa.mjs tqa-score.mjs; do
+            test -f "scripts/i18n/$f" || { echo "::error::init did not scaffold $f"; exit 1; }
+          done
+          # Our own contract tests must not land in a user's project.
+          if find scripts -name '*.test.mjs' | grep -q .; then
+            echo "::error::init leaked test files into the user project"; exit 1
+          fi
           node -e "JSON.parse(require('fs').readFileSync('i18n.config.json','utf8'))"
+          node -e "JSON.parse(require('fs').readFileSync('glossary.json','utf8'))"
           echo "packaged CLI works"
 
       - name: Config loader smoke test
         run: |
           mkdir -p /tmp/fixture/dist/about /tmp/fixture/dist/pricing
-          printf '<html lang="en"><body><p>Hello <strong>world</strong>.</p></body></html>' \
-            > /tmp/fixture/dist/about/index.html
-          printf '<html lang="en"><body><p>Plans and pricing.</p></body></html>' \
-            > /tmp/fixture/dist/pricing/index.html
+          # The fixture carries a full head on purpose. This pipeline REWRITES locale
+          # identity, it does not create it, so a page with no canonical and no hreflang
+          # alternates fails gate 4 by design — which is what a real template must supply.
+          write_page() {
+            cat > "$2" <<HTML
+          <!doctype html><html lang="en" dir="ltr"><head>
+          <link rel="canonical" href="https://example.com/$1">
+          <link rel="alternate" hreflang="en" href="https://example.com/$1">
+          <link rel="alternate" hreflang="es" href="https://example.com/es/$1">
+          <link rel="alternate" hreflang="x-default" href="https://example.com/$1">
+          <meta property="og:url" content="https://example.com/$1">
+          <meta property="og:locale" content="en">
+          </head><body>$3</body></html>
+          HTML
+          }
+          write_page about   /tmp/fixture/dist/about/index.html   '<p>Hello <strong>world</strong>.</p>'
+          write_page pricing /tmp/fixture/dist/pricing/index.html '<p>Plans and pricing.</p>'
           cat > /tmp/fixture/i18n.config.json <<'JSON'
           {
             "buildDir": "dist",
@@ -77,3 +119,22 @@ jobs:
           cd /tmp/fixture && npm install --no-audit --no-fund parse5
           node scripts/extract.mjs
           test -f i18n/source.json && echo "extract produced source.json"
+
+          # Hand-write a memory so build + gates run with no key and no network. This is
+          # the only place gates 7 and 8 are exercised end-to-end in CI.
+          node -e "
+            const fs = require('fs');
+            const src = JSON.parse(fs.readFileSync('i18n/source.json','utf8'));
+            const tm = {};
+            for (const [h,u] of Object.entries(src)) {
+              tm[h] = u.text
+                .replace('Hello','Hola').replace('world','mundo')
+                .replace('Plans and pricing.','Planes y precios.');
+            }
+            fs.mkdirSync('i18n/tm',{recursive:true});
+            fs.writeFileSync('i18n/tm/es.json', JSON.stringify(tm,null,2));
+          "
+          node scripts/build-locales.mjs --lang es
+          node scripts/verify.mjs --lang es
+          test -f i18n/locale-format.json || { echo "::error::no locale-format report"; exit 1; }
+          echo "build + eight gates pass on the fixture"

@@ -8,6 +8,8 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
 
+import { loadGlossary } from './glossary.mjs';
+
 const ROOT = process.env.I18N_ROOT ? resolve(process.env.I18N_ROOT) : process.cwd();
 const CONFIG_PATH = process.env.I18N_CONFIG ? resolve(process.env.I18N_CONFIG) : join(ROOT, 'i18n.config.json');
 
@@ -120,6 +122,70 @@ export const DNT = {
   brands: raw.doNotTranslate?.brands ?? [],
   formats: raw.doNotTranslate?.formats ?? ['PDF', 'DOCX', 'XLSX', 'PPTX', 'CSV', 'TXT', 'JSON', 'HTML', 'XML'],
 };
+
+/**
+ * Glossary — the term base. Array inline, or a path to a JSON file holding one.
+ *
+ * `doNotTranslate` is folded in as case-sensitive "keep" rules, so every existing config
+ * gains word-boundary matching and, for the first time, a check that its brands actually
+ * survived translation. Before 2.0 the brand list was matched against the whole trimmed
+ * unit and otherwise existed only as a sentence in the prompt; nothing verified the
+ * outcome. An explicit glossary entry for the same term wins, so a config can override
+ * the inherited default without deleting it from doNotTranslate.
+ */
+export const GLOSSARY = (() => {
+  const { terms, problems } = loadGlossary(raw.glossary, ROOT, resolve);
+
+  const named = new Set(terms.map((t) => t.source));
+  const inherited = loadGlossary(
+    [...DNT.brands, ...DNT.formats]
+      .filter((sourceText) => typeof sourceText === 'string' && sourceText.trim() && !named.has(sourceText))
+      .map((sourceText) => ({ source: sourceText, rule: 'keep' })),
+    ROOT,
+    resolve
+  ).terms;
+
+  const all = [...terms, ...inherited].sort((a, b) => b.source.length - a.source.length);
+  if (problems.length) {
+    for (const p of problems.slice(0, 10)) console.warn(`  glossary: ${p}`);
+    if (problems.length > 10) console.warn(`  glossary: ${problems.length - 10} more`);
+  }
+  return all;
+})();
+
+/**
+ * Locale conventions applied to translated text at build time.
+ *
+ * FORMATTING ONLY. `currency: "format"` rewrites how an amount is written — symbol
+ * placement, separators, spacing — and never what it is worth. There is no "convert"
+ * value and there is not going to be one: converting a price at a rate baked into a
+ * build is how a translation tool starts publishing wrong offers. Amounts are reported
+ * to i18n/locale-format.json instead, for a human to price per market.
+ *
+ * `units` is reserved and unimplemented. It is accepted so a config written now keeps
+ * parsing when unit conversion lands, and it does nothing today.
+ */
+export const LOCALE_FORMAT = (() => {
+  const raw_ = raw.localeFormat ?? {};
+  const cfg = {
+    numbers: raw_.numbers ?? true,
+    percent: raw_.percent ?? true,
+    currency: raw_.currency === 'off' ? 'off' : 'format',
+    units: 'off',
+  };
+  if (raw_.currency && raw_.currency !== 'off' && raw_.currency !== 'format') {
+    console.error(
+      `config.localeFormat.currency must be "format" or "off" (got "${raw_.currency}"). ` +
+        'Currency conversion is deliberately not supported.'
+    );
+    process.exit(1);
+  }
+  if (raw_.units && raw_.units !== 'off') {
+    console.warn('  localeFormat.units is reserved and not implemented yet — ignored');
+  }
+  cfg.enabled = cfg.numbers || cfg.percent || cfg.currency === 'format';
+  return cfg;
+})();
 
 /**
  * Model and provider.

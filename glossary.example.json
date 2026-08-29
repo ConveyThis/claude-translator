@@ -1,0 +1,23 @@
+[
+  {
+    "source": "Acme",
+    "rule": "keep",
+    "matchCase": true,
+    "note": "the company; lowercase 'acme' is an ordinary word and should be translated"
+  },
+  {
+    "source": "Acme Cloud Inc",
+    "rule": "keep",
+    "matchCase": true
+  },
+  {
+    "source": "Dashboard",
+    "rule": "translate",
+    "targets": {
+      "es": "Panel de control",
+      "pt-br": "Painel",
+      "ar": "لوحة التحكم"
+    },
+    "note": "product surface — must read the same on every page"
+  }
+]

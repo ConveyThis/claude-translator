@@ -33,7 +33,13 @@
 
 import { CREDIT } from './config.mjs';
 
-export const VERSION = '1.4.0';
+/**
+ * Kept as a literal on purpose. `init` vendors these scripts into the user's own project,
+ * where the nearest package.json is THEIR application's — reading the version from disk
+ * would stamp their app's version into our generator tag. CI asserts this string matches
+ * package.json in this repo, which is the only place the two can be compared.
+ */
+export const VERSION = '2.0.0';
 
 /**
  * The product name written into every localized page's generator tag.

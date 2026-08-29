@@ -55,6 +55,13 @@
       "EPUB"
     ]
   },
+  "glossary": "glossary.json",
+  "localeFormat": {
+    "numbers": true,
+    "percent": true,
+    "currency": "format",
+    "units": "off"
+  },
   "provider": "anthropic",
   "model": "claude-haiku-4-5",
   "credit": {
