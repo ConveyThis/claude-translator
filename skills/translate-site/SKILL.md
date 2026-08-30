@@ -2,8 +2,8 @@
 name: translate-site
 description: >
   Localize a static website into many languages by substituting translations into
-  already-built HTML, without re-rendering. Ships six proven scripts (extract,
-  translate, review, build, verify, SEO audit) plus the failure modes that cost real
+  already-built HTML, without re-rendering. Ships proven scripts (extract,
+  translate, review, build, verify, SEO audit, glossary, locale formatting, MQM quality scoring) plus the failure modes that cost real
   money to discover. Use when the user says "translate the site", "localize",
   "multi-language site", "i18n", "add languages", "translate all pages", or is
   replacing a translation proxy (Weglot, Bablic, Localize, TranslatePress) with self-hosted pages.
@@ -14,7 +14,7 @@ argument-hint: "[project-dir]"
 license: AGPL-3.0
 metadata:
   author: ConveyThis
-  version: "1.5.0"
+  version: "2.0.0"
   category: i18n
 ---
 
@@ -145,6 +145,7 @@ node scripts/i18n/review.mjs   --lang es        # quality flags
 node scripts/i18n/build-locales.mjs --lang all  # → dist/{lang}/…
 node scripts/i18n/verify.mjs   --lang all       # six gates
 node scripts/i18n/audit-seo.mjs                 # canonical/hreflang/JSON-LD/sitemaps
+node scripts/i18n/tqa.mjs      --lang es        # MQM quality score (optional, costs money)
 ```
 
 `finalize.sh <locales…>` collapses the per-locale cycle (gap-fill → review → purge →
@@ -168,6 +169,25 @@ because CJK encodes far more meaning per character. Purging those costs real mon
 matches and warn on zero. Attribute order is not guaranteed — `<link href="…"
 rel="canonical">` is as valid as `rel` first — and an order-dependent regex silently
 matches nothing while reporting success.
+
+**Never convert a currency, and never offer to.** `localeFormat` reformats amounts and
+the pipeline reports every one it saw to `i18n/locale-format.json`. Converting a price at
+a build-time rate is how a translation tool starts publishing wrong offers, and there is
+no config option for it. If the user asks for conversion, explain the report instead.
+
+**Gate 8 gates; gate 7 reports.** A changed numeric value fails the build, because a
+silently rewritten price passes every other check. Terminology only warns unless
+`--strict` is passed, because target languages inflect pinned terms and a strict check
+flags correct work — see `references/quality-review.md` on why over-flagging is worse
+than nothing.
+
+**This tool rewrites tags; it does not create them.** Every locale-identity rule replaces
+an attribute value on a tag the template already emits — the only thing ever inserted is the
+attribution marker. So the **full `hreflang` mesh and `sitemap.xml` must come from the user's
+own build**: `build-locales.mjs` rewrites only the `x-default` and source-language hrefs, and
+writes no sitemap at all. `audit-seo.mjs` checks both exhaustively, which is how a missing
+mesh surfaces. If the user's template lacks the alternates, say so plainly and point at
+`references/adapting-generators.md` — do not imply the pipeline will emit them.
 
 **Verify server-side state, not exit codes.** Especially with rsync on macOS
 (`openrsync` prints usage and exits **0** on an unsupported flag).

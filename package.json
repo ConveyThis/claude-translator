@@ -1,6 +1,6 @@
 {
   "name": "claude-translator",
-  "version": "1.5.0",
+  "version": "2.0.0",
   "description": "Translate a static website into dozens of languages as real static pages, by substituting into built HTML instead of re-rendering.",
   "type": "module",
   "license": "AGPL-3.0-or-later",
@@ -44,7 +44,8 @@
     "LICENSING.md",
     "PRIVACY.md",
     "CHANGELOG.md",
-    "i18n.config.example.json"
+    "i18n.config.example.json",
+    "glossary.example.json"
   ],
   "devDependencies": {
     "parse5": "^7.3.0"
@@ -56,7 +57,8 @@
     "i18n:build": "node scripts/build-locales.mjs",
     "i18n:verify": "node scripts/verify.mjs",
     "i18n:audit": "node scripts/audit-seo.mjs",
+    "i18n:tqa": "node scripts/tqa.mjs",
     "check": "for f in scripts/*.mjs scripts/providers/*.mjs bin/*.mjs; do node --check \"$f\" || exit 1; done && echo 'all scripts parse'",
-    "test": "node --test scripts/providers/providers.test.mjs bin/cli.test.mjs"
+    "test": "node --test scripts/providers/providers.test.mjs scripts/glossary.test.mjs scripts/format-locale.test.mjs scripts/tqa-score.test.mjs bin/cli.test.mjs"
   }
 }

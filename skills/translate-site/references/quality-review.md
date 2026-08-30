@@ -71,6 +71,34 @@ are legitimate — postal addresses, image filenames used as alt text, proper no
 
 ---
 
+## Where TQA fits
+
+`review.mjs` finds *defects by shape* — a dropped placeholder, a wholesale source-language
+return, a truncated string. It is cheap, offline, and blind to whether the text is any good.
+
+`tqa.mjs` answers the other question, and costs money. It scores a seeded,
+frequency-stratified sample against the MQM typology using a second model as judge.
+
+| | `review.mjs` | `tqa.mjs` |
+| --- | --- | --- |
+| Cost | free | one API call per ~10 units |
+| Finds | mechanical defects | mistranslation, register, terminology, awkwardness |
+| Output | `{lang}.review.json` | `i18n/tqa/{lang}.json` + `scorecard.md` |
+| Gates a build | no | no |
+
+Run `review.mjs` on every locale, every time. Run `tqa.mjs` when you need a number to
+compare — between locales, between models, or before and after a prompt change.
+
+**The same over-flagging discipline applies to the score itself.** Three guards exist
+because each of them failed once during development:
+
+- the judge defaults to a *different provider* than the translator, since a model scores
+  its own work generously
+- `--repeat` reports the gap between two runs on the same sample, so nobody reads a
+  decimal place that is really noise
+- a unit the judge could not assess is **excluded**, never counted as clean. An early
+  version reported `100.00 / 100` from a sample where every unit had failed to parse
+
 ## Workflow
 
 ```bash

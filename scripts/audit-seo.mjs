@@ -26,10 +26,13 @@ import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 
-import { BUILD_DIR as DIST, BASE_URL as BASE, LOCALES as LANG_ROWS, BY_PATH, RTL, getPages, I18N_DIR } from './config.mjs';
+import {
+  BUILD_DIR as DIST, BASE_URL as BASE, LOCALES as LANG_ROWS,
+  BY_PATH, RTL, getPages, I18N_DIR, ROOT_DIR,
+} from './config.mjs';
 import { creditBlock } from './credit.mjs';
 
-const ROOT = process.cwd();
+const ROOT = ROOT_DIR;
 
 const args = Object.fromEntries(
   process.argv
@@ -249,7 +252,7 @@ for (const [check, list] of Object.entries(byCheck).sort((a, b) => b[1].length -
   if (list.length > 3) console.log(`      … and ${(list.length - 3).toLocaleString()} more`);
 }
 
-writeFileSync(join(ROOT, 'i18n/seo-audit.json'), JSON.stringify({ counts, findings }, null, 2));
+writeFileSync(join(I18N_DIR, 'seo-audit.json'), JSON.stringify({ counts, findings }, null, 2));
 console.log(`\nwrote i18n/seo-audit.json (${findings.length.toLocaleString()} findings)`);
 
 creditBlock(

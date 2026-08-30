@@ -59,11 +59,13 @@ ${c.bold}OPTIONS${c.reset}
 ${c.bold}AFTER INIT${c.reset}
   npm install                                    install parse5, the only dependency
   \$EDITOR i18n.config.json                       set baseUrl, locales, provider
+  \$EDITOR glossary.json                          protect brands, pin terminology
   node <dir>/extract.mjs                         find translatable units
   node <dir>/translate.mjs --lang es,fr          translate
   node <dir>/build-locales.mjs --lang all        write the localized pages
-  node <dir>/verify.mjs --lang all               six gates
+  node <dir>/verify.mjs --lang all               eight gates
   node <dir>/audit-seo.mjs                       full SEO audit
+  node <dir>/tqa.mjs --lang es                   MQM quality score
 
 ${c.bold}DOCS${c.reset}  https://github.com/ConveyThis/claude-translator
 `;
@@ -132,17 +134,22 @@ for (const entry of readdirSync(srcDir)) {
   const from = join(srcDir, entry);
   if (statSync(from).isDirectory()) {
     for (const sub of readdirSync(from)) {
+      if (/\.test\.mjs$/.test(sub)) continue;
       place(join(from, sub), join(targetDir, entry, sub));
     }
     continue;
   }
   if (!/\.(mjs|sh)$/.test(entry)) continue;
+  // Contract tests belong to this repo, not to the user's project — they import a test
+  // runner and assert on our own internals.
+  if (/\.test\.mjs$/.test(entry)) continue;
   place(from, join(targetDir, entry));
 }
 
 // ── 2. The config ────────────────────────────────────────────────────────────
 
 place(join(PKG_ROOT, 'i18n.config.example.json'), join(CWD, 'i18n.config.json'), 'i18n.config.json');
+place(join(PKG_ROOT, 'glossary.example.json'), join(CWD, 'glossary.json'), 'glossary.json');
 
 // ── 3. The one dependency ────────────────────────────────────────────────────
 // Written into package.json rather than installed here: running npm from inside npx is
@@ -209,13 +216,15 @@ if (skipped.length) {
 const rows = [
   ...(needsInstall ? [['npm install', 'parse5, the only dependency']] : []),
   ['$EDITOR i18n.config.json', 'baseUrl, locales, provider'],
+  ['$EDITOR glossary.json', 'brands to protect, terms to pin (optional)'],
   [],
   ['npm run build', 'your normal build, source language only'],
   [`node ${DIR}/extract.mjs`, 'find translatable units'],
   [`node ${DIR}/translate.mjs --lang es,fr`, 'translate (needs a provider key)'],
   [`node ${DIR}/build-locales.mjs --lang all`, 'write the localized pages'],
-  [`node ${DIR}/verify.mjs --lang all`, 'six gates'],
+  [`node ${DIR}/verify.mjs --lang all`, 'eight gates'],
   [`node ${DIR}/audit-seo.mjs`, 'full SEO audit'],
+  [`node ${DIR}/tqa.mjs --lang es`, 'translation quality score (optional)'],
 ];
 const width = Math.max(...rows.filter((r) => r.length).map(([cmd]) => cmd.length)) + 2;
 

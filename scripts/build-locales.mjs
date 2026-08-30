@@ -28,10 +28,14 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, rmSync
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-import { BUILD_DIR as DIST, SEG_DIR, TM_DIR, BASE_URL as BASE, LOCALES as LANG_ROWS, BY_PATH, RTL, getPages } from './config.mjs';
+import {
+  BUILD_DIR as DIST, SEG_DIR, TM_DIR, BASE_URL as BASE, LOCALES as LANG_ROWS,
+  BY_PATH, RTL, getPages, ROOT_DIR, I18N_DIR, LOCALE_FORMAT,
+} from './config.mjs';
+import { formatText, intlLocale } from './format-locale.mjs';
 import { applyPageMarkers, applyVisibleLink, markerBytes } from './credit.mjs';
 
-const ROOT = process.cwd();
+const ROOT = ROOT_DIR;
 
 const args = Object.fromEntries(
   process.argv
@@ -270,6 +274,15 @@ console.log(
 
 let builtPages = 0;
 
+/**
+ * Every monetary amount seen, across every locale, written to i18n/locale-format.json.
+ *
+ * This is the deliberate answer to "does it convert currency?" — no, and here is the
+ * list so you can decide per market. A price is a commercial commitment; a build script
+ * is the wrong thing to be making one on your behalf at a rate it cannot check.
+ */
+const moneyFindings = [];
+
 for (const lang of LANGS) {
   const tmFile = join(TM_DIR, `${lang}.json`);
   if (!existsSync(tmFile)) {
@@ -282,6 +295,8 @@ for (const lang of LANGS) {
   rmSync(join(DIST, lang), { recursive: true, force: true });
 
   const report = { pages: 0, replaced: 0, untranslated: 0, misses: new Set() };
+  const INTL_TAG = intlLocale(BY_PATH[lang]);
+  let formatCount = 0;
 
   for (const target of targets) {
     const { slug, file, segments } = target;
@@ -297,11 +312,25 @@ for (const lang of LANGS) {
         report.untranslated++;
         continue;
       }
+      // Locale conventions are applied HERE, not in the model: rule 4 of the translation
+      // prompt tells the model to leave numbers alone precisely so this step can rewrite
+      // their presentation deterministically. Values are never changed — see
+      // format-locale.mjs for why currency conversion is permanently out of scope.
+      let localized = translated;
+      if (LOCALE_FORMAT.enabled) {
+        const formatted = formatText(translated, INTL_TAG, LOCALE_FORMAT);
+        localized = formatted.text;
+        formatCount += formatted.changes.length;
+        for (const m of formatted.money) {
+          moneyFindings.push({ page: slug || '(home)', currency: m.currency, value: m.value, wrote: m.wrote });
+        }
+      }
+
       let replacement;
-      if (seg.kind === 'block') replacement = renderBlock(translated, seg.tags ?? []);
-      else if (seg.kind === 'jsonld') replacement = escJson(translated);
-      else if (seg.kind.startsWith('attr:')) replacement = escAttr(translated);
-      else replacement = escHtml(translated);
+      if (seg.kind === 'block') replacement = renderBlock(localized, seg.tags ?? []);
+      else if (seg.kind === 'jsonld') replacement = escJson(localized);
+      else if (seg.kind.startsWith('attr:')) replacement = escAttr(localized);
+      else replacement = escHtml(localized);
 
       html = html.slice(0, seg.start) + replacement + html.slice(seg.end);
       report.replaced++;
@@ -319,6 +348,9 @@ for (const lang of LANGS) {
     `${lang}: ${report.pages} pages, ${report.replaced.toLocaleString()} segments replaced, ` +
       `${report.untranslated.toLocaleString()} left in English`
   );
+  if (LOCALE_FORMAT.enabled && formatCount) {
+    console.log(`  ${formatCount.toLocaleString()} number/currency/percent forms rewritten for ${INTL_TAG}`);
+  }
   if (report.misses.size) {
     console.log(`  ⚠ identity rules that matched nothing: ${[...report.misses].join(', ')}`);
   }
@@ -327,6 +359,23 @@ for (const lang of LANGS) {
 
 // Disclosed at the point of action, not buried in a README: this is what the pages
 // now carry, and which key removes it.
+if (LOCALE_FORMAT.enabled) {
+  const byCurrency = {};
+  for (const m of moneyFindings) byCurrency[m.currency] = (byCurrency[m.currency] ?? 0) + 1;
+  writeFileSync(
+    join(I18N_DIR, 'locale-format.json'),
+    JSON.stringify({ counts: byCurrency, total: moneyFindings.length, findings: moneyFindings }, null, 2)
+  );
+  if (moneyFindings.length) {
+    const summary = Object.entries(byCurrency).map(([c, n]) => `${n} ${c}`).join(', ');
+    console.log(
+      `\n\u2139 ${moneyFindings.length.toLocaleString()} monetary amount(s) reformatted, never converted (${summary}).` +
+        `\n  Values are unchanged in every locale. Review i18n/locale-format.json to decide` +
+        `\n  whether any market needs a different price — this pipeline will not guess one.`
+    );
+  }
+}
+
 const attrBytes = markerBytes(BY_PATH[LANGS[0]]);
 if (attrBytes) {
   console.log(

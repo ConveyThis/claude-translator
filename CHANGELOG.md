@@ -5,6 +5,96 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] — 2026-08-29
+
+Answers to a set of questions from a localization professional, who asked what the tool
+does about terminology, brand-name sense, locale number conventions, and whether there was
+any TQA evidence at all. Three of those had no answer. Now they do — and two README claims
+that did not survive being checked are corrected.
+
+### Added
+
+- **A glossary.** `glossary` in the config, inline or a path to a JSON file. Two rules:
+  `keep` (leave in the source language, case-sensitive by default) and `translate` with
+  per-locale `targets`. Matching is whole-word, so `Apple` never matches inside
+  `Applesauce`, and `matchCase` is what separates **Apple** the company from **apple** the
+  fruit — a distinction the old flat `doNotTranslate` list could not express.
+
+  Only the terms present in a batch are injected into that batch's prompt, so a large
+  glossary does not inflate every request. `doNotTranslate.brands` is folded in
+  automatically as case-sensitive `keep` rules, so existing configs gain word-boundary
+  matching and verification without being edited.
+
+  Changing a term re-translates **only** the units that contain it, tracked by a
+  fingerprint sidecar at `i18n/tm/{lang}.meta.json`. It is a sidecar rather than a key
+  inside the memory because the memory is documented as a hand-editable `hash -> string`
+  map, and three other scripts iterate it — a `__meta` key would have made every coverage
+  count off by one.
+
+- **Locale conventions for numbers, percentages and currency.** `localeFormat`. The model
+  is still told to leave numbers alone; `Intl` reformats them afterwards, deterministically.
+  `1,234.56` becomes `1.234,56` in German, `$5` becomes `5,00 $US` in French.
+
+  **Currency is formatted, never converted, and there is no option to convert it.** Every
+  monetary amount found is written to `i18n/locale-format.json` for a human to price per
+  market instead. Version numbers, times, IP addresses, ISO dates, phone numbers, fractions
+  and ungrouped numbers are deliberately left untouched — during development a greedy
+  pattern turned `192.168.1.1` into `1.921.681,1`, which is why only unambiguous quantities
+  are matched and why that case is now a test.
+
+- **`tqa.mjs` — MQM translation quality assessment.** Scores a seeded, frequency-stratified
+  sample using the standard MQM typology and severity weights (minor 1, major 5,
+  critical 10). Writes `i18n/tqa/{lang}.json` and a Markdown scorecard.
+
+  The judge defaults to a **different provider than the translator**, because models prefer
+  their own output; when no second key is available it says so in the run and in the
+  report. `--repeat` scores the same sample twice and reports the gap, because a quality
+  number without its variance is marketing. A unit the judge cannot assess is **excluded,
+  not counted as clean** — an early version printed `100.00 / 100` from a sample where
+  every single unit had failed, and it now refuses to report a score at all in that case.
+
+- **Gate 7 — glossary compliance.** Reports terms that were supposed to survive, or to be
+  rendered a particular way, and were not. Reports by default; `--strict` makes it fail the
+  build. It only warns because target languages inflect pinned terms, and
+  `references/quality-review.md` is explicit that over-flagging is worse than no check.
+
+- **Gate 8 — numeric integrity.** Fails the build when the *value* of a number changes
+  between source and translation. A model that ships `$39` where the source said `$49`
+  passes every other gate: identical markup, matching placeholders, plausible length,
+  fluent target language.
+
+### Fixed
+
+- **The README claimed to emit things it only rewrites.** "What you get" promised "a
+  complete `hreflang` set" and "per-locale sitemaps". Neither is generated: the only write
+  into the build directory is one HTML file per page, and every locale-identity rule
+  *replaces an attribute on a tag the template already emits*. The section is now split
+  into what the tool rewrites and what your template must supply — and it explains that
+  the rewrite-only design is what preserves byte-identical markup.
+
+- **`i18nDir` silently did nothing** in `verify.mjs` and `audit-seo.mjs`, which imported
+  `I18N_DIR` and then used hardcoded `i18n/...` paths. Same for `$I18N_ROOT`, which three
+  scripts ignored in favour of `process.cwd()`.
+
+- **The generator tag stamped a stale version** — `1.4.0` while the package said `1.5.0`.
+  It cannot be read from `package.json` (once vendored, the nearest manifest is the user's
+  own application), so CI now asserts the literal matches instead.
+
+- **`init` vendored our own contract tests** into the user's project, where they import a
+  test runner and assert on our internals.
+
+### Changed
+
+- `verify.mjs` runs eight gates, not six.
+- `init` scaffolds a starter `glossary.json`.
+- CI now runs the fixture through build and all eight gates, not just extraction, and
+  checks that the packaged CLI scaffolds every new script.
+
+> **Upgrading:** `init` copies the pipeline into your project, so an existing install
+> keeps running the scripts it already has. Re-run `npx claude-translator init --force` to
+> pick up the new stages. Nothing in this release changes existing translations, and no
+> memory is invalidated unless you add a glossary.
+
 ## [1.5.0] — 2026-08-25
 
 ### Added

@@ -90,7 +90,12 @@ test('init scaffolds a runnable pipeline', () => {
     'scripts/i18n/credit.mjs',
     'scripts/i18n/providers/index.mjs',
     'scripts/i18n/providers/anthropic.mjs',
+    'scripts/i18n/glossary.mjs',
+    'scripts/i18n/format-locale.mjs',
+    'scripts/i18n/tqa.mjs',
+    'scripts/i18n/tqa-score.mjs',
     'i18n.config.json',
+    'glossary.json',
   ]) {
     assert.ok(existsSync(join(cwd, f)), `init did not write ${f}`);
     assert.ok(stdout.includes(f.split('/').pop()), `init wrote ${f} without reporting it`);
@@ -157,9 +162,23 @@ test('an existing .gitignore is appended to, not replaced', () => {
 
 test('package.json "files" ships everything init needs to copy', () => {
   const root = resolve(dirname(CLI), '..');
-  for (const needed of ['bin', 'scripts', 'i18n.config.example.json']) {
+  for (const needed of ['bin', 'scripts', 'i18n.config.example.json', 'glossary.example.json']) {
     assert.ok(PKG.files.includes(needed), `"files" omits ${needed}; npx would install a broken package`);
   }
   assert.equal(PKG.bin['claude-translator'], 'bin/claude-translator.mjs');
   assert.ok(existsSync(join(root, PKG.bin['claude-translator'])), 'bin path does not exist');
+});
+
+test('init does not vendor our own contract tests into the user project', () => {
+  // scripts/*.test.mjs import node:test and assert on internals. Copying them into
+  // someone else's repo puts failing, irrelevant tests in their suite.
+  const { cwd } = run(['init']);
+  const leaked = [
+    'scripts/i18n/glossary.test.mjs',
+    'scripts/i18n/format-locale.test.mjs',
+    'scripts/i18n/tqa-score.test.mjs',
+    'scripts/i18n/providers/providers.test.mjs',
+  ].filter((f) => existsSync(join(cwd, f)));
+  assert.deepEqual(leaked, [], `init leaked test files: ${leaked.join(', ')}`);
+  rmSync(cwd, { recursive: true, force: true });
 });

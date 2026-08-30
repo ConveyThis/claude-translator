@@ -18,6 +18,14 @@
  *                        inLanguage / @id / url — the three sitewide defects the
  *                        2026-08-13 audit found on the proxy-served pages.
  *   5. Coverage          share of segments still in English, per locale.
+ *   6. Never offered     visible text the extractor never picked up. Coverage measures
+ *                        translated-of-EXTRACTED and is structurally blind to this.
+ *   7. Glossary          terms that were supposed to survive, or to be rendered a
+ *                        particular way, and were not. REPORTS by default; --strict
+ *                        makes it gate, because inflection makes strictness noisy.
+ *   8. Numeric integrity numbers that changed value between source and translation.
+ *                        Gates by default: a silently rewritten price is a commercial
+ *                        problem, and no other gate can see it.
  */
 
 import { readFileSync, readdirSync, existsSync } from 'fs';
@@ -27,11 +35,15 @@ import { parse } from 'parse5';
 
 import {
   BUILD_DIR as DIST, SEG_DIR, BASE_URL as BASE, LOCALES as LANG_ROWS,
-  BY_PATH, RTL, getPages, I18N_DIR, DNT,
+  BY_PATH, RTL, getPages, I18N_DIR, TM_DIR, SOURCE_FILE, ROOT_DIR, DNT, GLOSSARY,
 } from './config.mjs';
 import { creditBlock, markerBytes, GENERATOR_NAME, PRIOR_GENERATOR_NAMES } from './credit.mjs';
+import { checkCompliance } from './glossary.mjs';
 
-const ROOT = process.cwd();
+// ROOT_DIR honours $I18N_ROOT; process.cwd() did not, so a run from another
+// directory read the wrong tree. Paths under i18n/ come from config so that
+// `i18nDir` actually takes effect — it was imported here and then ignored.
+const ROOT = ROOT_DIR;
 
 /**
  * Format, protocol and standards tokens that are correct unchanged in every language.
@@ -53,6 +65,9 @@ const args = Object.fromEntries(
     .map((s) => s.trim().split(/\s+/))
     .map(([k, ...v]) => [k, v.join(' ') || true])
 );
+
+/** Gate 7 reports by default; --strict makes a terminology violation fail the build. */
+const STRICT = Boolean(args.strict);
 
 
 const requested = String(args.lang ?? '').trim();
@@ -238,7 +253,7 @@ if (identityBad.length) fail('identity', `${identityBad.length} pages`);
 console.log('\n[5] translation coverage');
 const totalSegments = pages.reduce((n, p) => n + p.segmentCount, 0);
 for (const lang of LANGS) {
-  const tmFile = join(ROOT, 'i18n/tm', `${lang}.json`);
+  const tmFile = join(TM_DIR, `${lang}.json`);
   if (!existsSync(tmFile)) {
     console.log(`      ${lang}: no memory`);
     continue;
@@ -331,8 +346,8 @@ function extractedBlob(slug) {
   return entry.segments.map((s) => (src[s.hash]?.text ?? '').replace(/<\/?\d+\/?>/g, ' ')).join('  ');
 }
 
-const SOURCE = existsSync(join(ROOT, 'i18n/source.json'))
-  ? JSON.parse(readFileSync(join(ROOT, 'i18n/source.json'), 'utf8'))
+const SOURCE = existsSync(SOURCE_FILE)
+  ? JSON.parse(readFileSync(SOURCE_FILE, 'utf8'))
   : null;
 
 console.log('\n[6] text never offered for translation');
@@ -363,6 +378,99 @@ for (const lang of LANGS) {
   );
   for (const e of examples) console.log(`         NOT EXTRACTED: ${JSON.stringify(e.slice(0, 70))}`);
   if (holes > 0) fail('extraction-hole', `${lang}: ${holes} strings never offered for translation`);
+}
+
+// ── Gate 7: glossary compliance ──────────────────────────────────────────────
+// Terminology was previously unverifiable. A brand could be translated away and every
+// gate still passed: gate 2 compares markup, gate 5 counts coverage, and gate 6 uses the
+// brand list only to SUPPRESS false alarms. Nothing asserted a term survived.
+//
+// Reports by default and gates only under --strict, on purpose. Target languages inflect
+// ("Panel de control" -> "del Panel de control"), compound ("Dashboard-Ansicht") and
+// decline, so a strict test flags correct work. references/quality-review.md is explicit
+// that a heuristic which over-flags is worse than none, and the remedy here —
+// purge-and-retranslate — costs real money.
+
+console.log('\n[7] glossary compliance');
+if (GLOSSARY.length === 0) {
+  console.log('      no glossary configured \u2014 skipped');
+} else {
+  for (const lang of LANGS) {
+    const tmFile = join(TM_DIR, `${lang}.json`);
+    if (!existsSync(tmFile)) {
+      console.log(`      ${lang}: no memory`);
+      continue;
+    }
+    const tm = JSON.parse(readFileSync(tmFile, 'utf8'));
+    const violations = [];
+    for (const [hash, unit] of Object.entries(SOURCE)) {
+      const translated = tm[hash];
+      if (typeof translated !== 'string') continue;
+      for (const v of checkCompliance(unit.text, translated, GLOSSARY, lang)) {
+        violations.push({ hash, ...v, source: unit.text.slice(0, 60) , term: v.source });
+      }
+    }
+    const checked = Object.keys(tm).length;
+    const pct = checked ? (violations.length * 100) / checked : 0;
+    console.log(
+      `      ${lang}: ${violations.length} violation(s) in ${checked.toLocaleString()} units (${pct.toFixed(2)}%)`
+    );
+    for (const v of violations.slice(0, 5)) {
+      console.log(`        "${v.term}" \u2192 expected "${v.expected}" in: ${v.source}\u2026`);
+    }
+    if (violations.length > 5) console.log(`        \u2026 and ${violations.length - 5} more`);
+    if (STRICT && violations.length) fail('glossary', `${lang}: ${violations.length} violation(s)`);
+  }
+  if (!STRICT) console.log('      (reporting only \u2014 pass --strict to gate on this)');
+}
+
+// ── Gate 8: numeric integrity ────────────────────────────────────────────────
+// A model that silently rewrites "$49/month" as "$39/month" passes every other gate:
+// the markup is identical, the placeholder count matches, the length is plausible and
+// the text is fluent target-language. Prices are commercial commitments, so this one
+// DOES gate by default.
+//
+// Compares multisets, not sequences: languages legitimately reorder ("2 of 3" ->
+// "3 dintre 2" never happens, but date and measurement order does move). Digit-group
+// separators are stripped first, because locale formatting is applied at build time and
+// is a correct difference, not a defect.
+
+const NUM_RE = /\d[\d.,\u00a0\u202f ]*\d|\d/g;
+
+/** Numbers reduced to a comparable form: separators stripped, trailing zeros normalised. */
+function numeralMultiset(text) {
+  const found = String(text).match(NUM_RE) ?? [];
+  return found
+    .map((n) => n.replace(/[.,\u00a0\u202f ]/g, ''))
+    .filter((n) => n.length > 0)
+    .map((n) => n.replace(/^0+(?=\d)/, ''))
+    .sort();
+}
+
+console.log('\n[8] numeric integrity');
+for (const lang of LANGS) {
+  const tmFile = join(TM_DIR, `${lang}.json`);
+  if (!existsSync(tmFile)) {
+    console.log(`      ${lang}: no memory`);
+    continue;
+  }
+  const tm = JSON.parse(readFileSync(tmFile, 'utf8'));
+  const drifted = [];
+  for (const [hash, unit] of Object.entries(SOURCE)) {
+    const translated = tm[hash];
+    if (typeof translated !== 'string') continue;
+    const a = numeralMultiset(unit.text);
+    const b = numeralMultiset(translated);
+    if (a.join('|') !== b.join('|')) {
+      drifted.push({ src: unit.text.slice(0, 70), out: translated.slice(0, 70), a, b });
+    }
+  }
+  console.log(`      ${lang}: ${drifted.length} unit(s) whose numbers changed`);
+  for (const d of drifted.slice(0, 5)) {
+    console.log(`        [${d.a.join(', ')}] \u2192 [${d.b.join(', ')}]  ${d.src}\u2026`);
+  }
+  if (drifted.length > 5) console.log(`        \u2026 and ${drifted.length - 5} more`);
+  if (drifted.length) fail('numeric-drift', `${lang}: ${drifted.length} unit(s)`);
 }
 
 // ── Result ───────────────────────────────────────────────────────────────────
