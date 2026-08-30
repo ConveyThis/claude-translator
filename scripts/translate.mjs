@@ -32,6 +32,7 @@ import {
   PROVIDER as CFG_PROVIDER, API_BASE_URL, API_KEY_ENV, JSON_MODE, PRICING,
 } from './config.mjs';
 import { termsForBatch, glossaryPrompt, glossaryFingerprint, containsTerm } from './glossary.mjs';
+import { roleOf, rolePrompt } from './roles.mjs';
 import { hint, link } from './credit.mjs';
 import { loadProvider, extractJson } from './providers/index.mjs';
 
@@ -124,9 +125,10 @@ const TECH_TOKENS = [
  */
 const DNT_NAMES = [...new Set([...DNT.brands, ...DNT.formats, ...TECH_TOKENS])];
 
-function systemPrompt(langCode, batchTerms = []) {
+function systemPrompt(langCode, batchTerms = [], batchRoles = []) {
   const name = LANG_NAMES[langCode] ?? langCode;
   const terminology = glossaryPrompt(batchTerms, langCode);
+  const context = rolePrompt(batchRoles);
   return [
     `You are a professional translator localising the website of ${SITE_NAME}${SITE_DESCRIPTION ? `, ${SITE_DESCRIPTION}` : ''}.`,
     `Translate from ${SOURCE_LANGUAGE} into ${name} (${langCode}).`,
@@ -146,6 +148,7 @@ function systemPrompt(langCode, batchTerms = []) {
     `6. Do not add explanations, notes or quotes around the result.`,
     RTL.has(langCode) ? `7. ${name} is right-to-left. Write natural RTL text; do not insert directional marks.` : ``,
     terminology,
+    context,
     ``,
     `Return a JSON array. For each input item return { "id": <same id>, "text": "<translation>" }.`,
   ]
@@ -195,10 +198,11 @@ async function callModel(langCode, items, attempt = 1, jsonMode = JSON_MODE, dro
   // Recomputed per call, not per run, so a batch that gets halved on a safety block or a
   // truncation carries exactly the terms its own half contains.
   const batchTerms = termsForBatch(GLOSSARY, items.map((i) => i.text), langCode);
+  const batchRoles = items.map((i) => i.el).filter(Boolean);
 
   const { url, headers, body } = PROVIDER.request({
     model: MODEL,
-    system: systemPrompt(langCode, batchTerms),
+    system: systemPrompt(langCode, batchTerms, batchRoles),
     items,
     temperature: attempt === 1 ? 0.2 : 0.4,
     key: KEY,
@@ -430,7 +434,12 @@ async function translateLang(langCode, units) {
       if (myIndex >= batches.length) return;
       const batch = batches[myIndex];
 
-      const items = batch.map(([, unit], i) => ({ id: i, text: unit.text }));
+      // `el` is omitted for ordinary prose rather than sent as null: a site of nothing but
+      // paragraphs then produces a byte-identical payload to 1.x and costs not one extra token.
+      const items = batch.map(([, unit], i) => {
+        const el = roleOf(unit);
+        return el ? { id: i, text: unit.text, el } : { id: i, text: unit.text };
+      });
 
       let rows;
       let usage;
@@ -459,7 +468,10 @@ async function translateLang(langCode, units) {
 
       for (const [hash, unit, problem] of retry) {
         try {
-          const solo = await callModel(langCode, [{ id: 0, text: unit.text }]);
+          const soloEl = roleOf(unit);
+          const solo = await callModel(langCode, [
+            soloEl ? { id: 0, text: unit.text, el: soloEl } : { id: 0, text: unit.text },
+          ]);
           const out = solo.rows.find((r) => r.id === 0)?.text;
           inTok += solo.usage.inTok;
           outTok += solo.usage.outTok;

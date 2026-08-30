@@ -171,11 +171,19 @@ const hashOf = (s) => createHash('sha1').update(s).digest('hex').slice(0, 16);
 const sources = new Map();
 let totalSegments = 0;
 
-function record(text, kind, sample) {
+function record(text, kind, sample, el = null) {
   const h = hashOf(text);
   const hit = sources.get(h);
-  if (hit) hit.count++;
-  else sources.set(h, { text, kind, count: 1, sample });
+  if (hit) {
+    hit.count++;
+    // The SAME string can appear in a <button> on one page and a <p> on another. The hash
+    // is over the text alone, so both share one unit and one translation. Keeping the
+    // first element seen would hand the model a confident wrong answer on the other, so a
+    // conflict clears the hint instead and the unit is translated as ordinary prose.
+    if (hit.el !== el) hit.el = null;
+  } else {
+    sources.set(h, { text, kind, count: 1, sample, el });
+  }
   return h;
 }
 
@@ -285,7 +293,14 @@ function collectAttrs(node, html, segments, pageKey, deep = false) {
       segments.push({
         start: aLoc.startOffset + idx,
         end: aLoc.startOffset + idx + attr.value.length,
-        hash: record(value, `attr:${attr.name}`, pageKey),
+        hash: record(
+          value,
+          `attr:${attr.name}`,
+          pageKey,
+          // kind flattens every meta tag to "attr:content", but a description behaves
+          // nothing like an og:title, so the key travels in el instead.
+          node.tagName === 'meta' ? `meta:${attrMap.name || attrMap.property}` : node.tagName
+        ),
         kind: `attr:${attr.name}`,
         tags: [],
       });
@@ -394,7 +409,7 @@ function collect(node, html, segments, pageKey) {
         segments.push({
           start: innerStart + lead,
           end: innerEnd - trail,
-          hash: record(trimmed, 'block', pageKey),
+          hash: record(trimmed, 'block', pageKey, tag),
           kind: 'block',
           tags: unit.tags.map((t) => [t.open, t.close]),
         });
@@ -420,7 +435,7 @@ function collect(node, html, segments, pageKey) {
       segments.push({
         start: cLoc.startOffset + lead,
         end: cLoc.startOffset + lead + trimmed.length,
-        hash: record(decodeEntities(trimmed), 'text', pageKey),
+        hash: record(decodeEntities(trimmed), 'text', pageKey, tag),
         kind: 'text',
         tags: [],
       });
