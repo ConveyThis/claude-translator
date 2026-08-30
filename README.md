@@ -121,7 +121,8 @@ against each other rather than against a number in a README.
 
 > This project ships **no API key and makes no calls on your behalf**. Your key is read
 > from your environment, used to call your chosen provider directly from your machine, and
-> never transmitted anywhere else. There is no telemetry.
+> never transmitted anywhere else. There is no telemetry — see [PRIVACY.md](PRIVACY.md),
+> which shows how to verify that against the source.
 
 ---
 
@@ -458,6 +459,7 @@ ln -s "$PWD/claude-translator/skills/translate-site" ~/.claude/skills/translate-
 | [`skills/translate-site/references/throughput-and-cost.md`](skills/translate-site/references/throughput-and-cost.md) | Budgeting a run, or making it faster |
 | [`skills/translate-site/references/adapting-generators.md`](skills/translate-site/references/adapting-generators.md) | Using anything other than Astro |
 | [`skills/translate-site/references/providers.md`](skills/translate-site/references/providers.md) | Changing model, running locally, or writing an adapter |
+| [`PRIVACY.md`](PRIVACY.md) | You want to know exactly what leaves your machine, and how to check |
 | [`LICENSING.md`](LICENSING.md) | You are wrapping a modified copy in a hosted service |
 
 ## Supported generators
