@@ -170,6 +170,12 @@ matches and warn on zero. Attribute order is not guaranteed — `<link href="…
 rel="canonical">` is as valid as `rel` first — and an order-dependent regex silently
 matches nothing while reporting success.
 
+**Element context is a hint, never a constraint.** Units carry an `el` label (button,
+heading, form label, meta description...) so the model can pick the right register. There is
+deliberately no length enforcement: a unit that fails validation ships in the SOURCE
+language, so gating on length would replace a slightly-long German button with an English
+one. If a user asks for a character budget, explain that tradeoff first.
+
 **Never convert a currency, and never offer to.** `localeFormat` reformats amounts and
 the pipeline reports every one it saw to `i18n/locale-format.json`. Converting a price at
 a build-time rate is how a translation tool starts publishing wrong offers, and there is

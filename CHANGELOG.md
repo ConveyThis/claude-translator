@@ -5,12 +5,12 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] — 2026-08-29
+## [2.0.0] — 2026-08-30
 
 Answers to a set of questions from a localization professional, who asked what the tool
-does about terminology, brand-name sense, locale number conventions, and whether there was
-any TQA evidence at all. Three of those had no answer. Now they do — and two README claims
-that did not survive being checked are corrected.
+does about terminology, brand-name sense, register in tightly-spaced CTAs, locale number
+conventions, and whether there was any TQA evidence at all. Four of those had no answer.
+Now they do — and two README claims that did not survive being checked are corrected.
 
 ### Added
 
@@ -52,6 +52,30 @@ that did not survive being checked are corrected.
   number without its variance is marketing. A unit the judge cannot assess is **excluded,
   not counted as clean** — an early version printed `100.00 / 100` from a sample where
   every single unit had failed, and it now refuses to report a score at all in that case.
+
+- **Element context for register (`el`).** The model now learns *what* a string is, not
+  only what it says. `extract.mjs` always knew — it walks the DOM with `node.tagName` in
+  hand — and threw it away, so rule 5's "Headings stay headings; button labels stay short"
+  was unenforceable: every string arrived looking like prose.
+
+  A `<button>`, a standalone `<a>`, a heading, a `<label>`, an `alt` attribute and a meta
+  description now each carry a short label, and the prompt gains a CONTEXT block describing
+  **only the roles present in that batch**. Ordinary prose sends no field at all, so a site
+  of nothing but paragraphs produces a byte-identical payload to 1.x.
+
+  Two deliberate restraints. The button guidance does **not** demand the imperative — German
+  UI prefers a verbal noun and French the infinitive, and ordering a literal command
+  everywhere is the exact defect this exists to avoid. And when the same string appears as
+  both a button and a paragraph, the hint is **cleared** rather than guessed: one hash means
+  one translation, and a confident wrong answer is worse than none.
+
+  `kind` is untouched. It looks like the natural place for this, but `build-locales.mjs`
+  switches on it to choose an escaper, and a value like `'block:button'` would fall through
+  to `escHtml` and print literal `&lt;0&gt;` placeholder tokens as visible text on every
+  localized page — with no test to catch it. The element travels in a new field instead.
+
+  **No translation memory is invalidated.** Unit hashes are computed from text alone, and a
+  fixture run proves the hashes are byte-identical before and after the change.
 
 - **Gate 7 — glossary compliance.** Reports terms that were supposed to survive, or to be
   rendered a particular way, and were not. Reports by default; `--strict` makes it fail the

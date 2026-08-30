@@ -59,6 +59,6 @@
     "i18n:audit": "node scripts/audit-seo.mjs",
     "i18n:tqa": "node scripts/tqa.mjs",
     "check": "for f in scripts/*.mjs scripts/providers/*.mjs bin/*.mjs; do node --check \"$f\" || exit 1; done && echo 'all scripts parse'",
-    "test": "node --test scripts/providers/providers.test.mjs scripts/glossary.test.mjs scripts/format-locale.test.mjs scripts/tqa-score.test.mjs bin/cli.test.mjs"
+    "test": "node --test scripts/providers/providers.test.mjs scripts/glossary.test.mjs scripts/format-locale.test.mjs scripts/tqa-score.test.mjs scripts/roles.test.mjs bin/cli.test.mjs"
   }
 }

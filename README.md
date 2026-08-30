@@ -318,6 +318,39 @@ be translated away and every gate still passed.
 Editing a glossary target re-translates **only** the units containing that term. A
 fingerprint sidecar next to the memory records what it was built against.
 
+## Register: buttons are not paragraphs
+
+The prompt has always ended with *"Headings stay headings; button labels stay short."* Until
+2.0 the model had no way to obey it — it received the string and nothing else, so a button
+label and a body paragraph were indistinguishable.
+
+The extractor always knew the answer and discarded it. Now each unit carries a short label
+where the answer changes the translation:
+
+| The string came from | It is told |
+| --- | --- |
+| `<button>`, or an `<a>` standing on its own | a control — keep it near the source length, no final period |
+| `<h1>`–`<h6>` | a headline — do not expand it into a sentence |
+| `<title>` | the tab and search-result title |
+| `<label>`, `<th>`, `<option>` | short, nominal furniture |
+| `alt`, `placeholder`, `aria-label` | described for a screen reader, or shown inside an empty field |
+| `<meta name="description">` | search-result copy, roughly 155 characters |
+
+Ordinary prose carries **no label at all**, so a site of nothing but paragraphs sends a
+payload byte-identical to 1.x and pays nothing for the feature. The prompt describes only the
+roles that actually appear in each batch.
+
+Two things it deliberately does not do. It does **not** demand the imperative for buttons —
+German UI prefers a verbal noun, French the infinitive, and ordering a literal command in
+every language is the defect this exists to prevent; it tells the model to use whatever
+construction that language puts on buttons. And when the same string appears as both a button
+and a paragraph it **clears** the hint rather than guessing, because one hash means one
+translation and a confident wrong answer is worse than none.
+
+There is no length *enforcement* — no character budget, no retry on overflow. Failed units
+ship in the source language, so a hard gate here would replace a slightly-long German button
+with an English one. That is a worse page.
+
 ## Numbers and money
 
 `1,234.56` is `1.234,56` in German and `1 234,56` in French. `$5` is `5,00 $US` in French.
